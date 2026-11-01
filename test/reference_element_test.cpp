@@ -99,7 +99,7 @@ namespace {
                     EXPECT_NEAR(table.values_[a], exact[a], 1e-15);
                 }
             }
-            EXPECT_THROW(e.facetLocalDofs(e.facetCount()), std::out_of_range);
+            EXPECT_THROW((void)e.facetLocalDofs(e.facetCount()), std::out_of_range);
         }
     }
     TEST(ReferenceElement, CenterAndOrderedSideLayout) {
@@ -119,10 +119,10 @@ namespace {
         EXPECT_EQ((std::vector<std::size_t>(side.begin(), side.end())), (std::vector<std::size_t>{0, 2, 1}));
     }
     TEST(ReferenceElement, RejectsInvalidKeysCoordinatesAndOverflow) {
-        EXPECT_THROW(fem::referenceElement({mesh::CellFamily::Quadrilateral}), std::invalid_argument);
-        EXPECT_THROW(fem::referenceElement({mesh::CellFamily::Triangle, fem::BasisFamily::ContinuousLagrange, 2}),
+        EXPECT_THROW((void)fem::referenceElement({mesh::CellFamily::Quadrilateral}), std::invalid_argument);
+        EXPECT_THROW((void)fem::referenceElement({mesh::CellFamily::Triangle, fem::BasisFamily::ContinuousLagrange, 2}),
                      std::invalid_argument);
-        EXPECT_THROW(fem::referenceElement({mesh::CellFamily::Triangle, static_cast<fem::BasisFamily>(99), 1}),
+        EXPECT_THROW((void)fem::referenceElement({mesh::CellFamily::Triangle, static_cast<fem::BasisFamily>(99), 1}),
                      std::invalid_argument);
         const fem::ElementKey key{mesh::CellFamily::Triangle};
         for (double bad : {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {

@@ -21,7 +21,7 @@ option(THERMOFEM_BUILD_EXAMPLES "Build ThermoFEM examples" ON)
 
 add_library(thermofem STATIC src/version.cu src/DataStructure/Memory.cu src/DataStructure/CsrMatrix.cu src/LinearAlgebra/Backend.cu src/LinearAlgebra/IterationContext.cu src/IO/MatrixMarket.cu src/Multigrid/GpuAggregation.cu src/Mesh/Mesh.cu src/IO/Msh.cu
     src/Case/Diagnostics.cu src/Case/Validation.cu src/Case/Region.cu src/Case/Binding.cu src/Mesh/FacetTopology.cu src/IO/Case.cu
-    src/FiniteElement/ReferenceElement.cu)
+    src/FiniteElement/ReferenceElement.cu src/FiniteElement/Space.cu src/Case/TemperatureSpace.cu)
 add_library(ThermoFEM::thermofem ALIAS thermofem)
 target_include_directories(thermofem SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/picojson")
 target_include_directories(thermofem PUBLIC
