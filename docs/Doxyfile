@@ -12,6 +12,7 @@ EXTENSION_MAPPING      = cu=C++ cuh=C++
 EXTRACT_ALL            = YES
 GENERATE_HTML          = YES
 GENERATE_LATEX         = NO
+USE_MATHJAX            = YES
 HAVE_DOT               = NO
 QUIET                  = YES
 WARNINGS               = YES

@@ -60,6 +60,6 @@
 
 配置失败无definition，绑定失败无bound；已有输入与旧绑定不变。系统分配异常向上传递，零限额或非绝对流读取基目录抛invalid_argument。普通IO失败返回IO_ERROR；调用方自行给流启用异常时可能抛ios_base::failure。输出目录不在加载阶段创建或清空。
 
-成功绑定不等于可执行。高阶温度空间或非首期域单元的后端限制放在独立capability报告；几何、DOF、可解性、组装、结果输出保留pending项目，`executable()`据此为false。当前还没有FEM组装/时间推进/VTU输出器，也没有从配置创建求解器实例的工厂。CG的SPD数学前提、每个连通分量的纯Neumann问题及未来AMG适配不得被配置解析替代。
+成功绑定不等于可执行。高阶温度空间或非首期域单元的后端限制放在独立capability报告；几何、DOF、可解性、组装、结果输出保留pending项目，`executable()`据此为false；这个报告描述绑定阶段，不随后续处理改变。完整离散与GPU组装调用见[全局组装与线性系统](assembly-system.md)，solve-case示例按配置创建CG/BiCGStab并进行时间推进；VTU输出器另属独立职责。CG的SPD数学前提、每个连通分量的纯Neumann问题及未来AMG适配不得被配置解析替代。
 
 解析依赖为项目内picojson原样副本，见`third-party/README.md`与其原始BSD-2-Clause许可证。公开头文件不暴露第三方类型，安装消费者无需JSON包。所有者指定副本的精确版本未核实，以SHA256定位，不宣称使用某个发布版本。

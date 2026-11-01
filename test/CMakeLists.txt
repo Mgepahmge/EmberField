@@ -14,5 +14,5 @@ add_executable(thermofem_tests version_test.cpp data_structure_test.cpp linear_a
 target_link_libraries(thermofem_tests PRIVATE ThermoFEM::thermofem GTest::gtest_main)
 target_sources(thermofem_tests PRIVATE reference_element_test.cpp finite_element_space_test.cpp temperature_space_test.cpp geometry_integration_test.cpp thermal_element_test.cpp condition_preparation_test.cpp gpu_thermal_test.cpp gpu_preparation_test.cpp)
 include(GoogleTest)
-target_sources(thermofem_tests PRIVATE assembly_test.cpp system_test.cpp)
+target_sources(thermofem_tests PRIVATE assembly_test.cpp system_test.cpp thermal_assembly_test.cpp)
 gtest_discover_tests(thermofem_tests NO_PRETTY_VALUES)

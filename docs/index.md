@@ -9,6 +9,11 @@
 | [线性代数接口](linear-algebra.md) | 运算、运算符、精度支持与执行约束 |
 | [求解组件设计](solver.md) | 平滑器、预条件子、求解器及 AMG 循环的架构和契约 |
 | [Matrix Market 用户手册](matrix-market.md) | 矩阵读取、命令行求解、参数、输出与退出码 |
+| [网格与MSH](mesh.md) | 网格拓扑及文件读写 |
+| [完整算例配置](case.md) | 物理参数、区域绑定和JSON契约 |
+| [有限元空间](finite-element-space.md) | 形函数、自由度与局部映射 |
+| [离散准备](thermal-preparation.md) | 几何、积分、条件与GPU局部热算子 |
+| [全局组装与线性系统](assembly-system.md) | GPU稳定散加、稳态、后向Euler与对称消元 |
 
 构建、安装和 Doxygen 生成方法见项目根目录的 [README](../README.md)。
 文档只维护设计和使用所需的信息，不收录开发日志、修复经过、阶段进度或逐次测试记录。

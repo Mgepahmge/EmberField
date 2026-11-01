@@ -10,7 +10,7 @@ ThermoFEM 是本科毕业设计“基于有限元的热力学仿真求解器设�
 - 封装求解器接口并导出仿真结果，提供展示模型配置、求解过程和温度场结果的 Demo。
 - 通过典型算例与解析解或成熟仿真软件对比，验证计算精度与求解性能。
 
-基础数据结构包括支持 global、pinned、mapped、managed 策略的 RAII CUDA Buffer，以及向量、行主序稠密矩阵和 CSR 稀疏矩阵。线性代数层使用 cuBLAS/cuSPARSE，提供命名函数与运算符。求解流程包括加权 Jacobi 平滑器、GPU 原生聚合 AMG 预条件子和右预条件 BiCGStab 求解器，通过独立基类的 setup/apply 接口组合，不使用 cuSOLVER。AMG 提供 V、W、F 三种循环。有限元组装与热传导仿真不在现有接口的功能范围内。
+基础数据结构包括支持 global、pinned、mapped、managed 策略的 RAII CUDA Buffer，以及向量、行主序稠密矩阵和 CSR 稀疏矩阵。线性代数层使用 cuBLAS/cuSPARSE，提供命名函数与运算符。求解流程包括加权 Jacobi 平滑器、GPU 原生聚合 AMG 预条件子、CG和右预条件 BiCGStab 求解器，通过独立基类的 setup/apply 接口组合，不使用 cuSOLVER。AMG 提供 V、W、F 三种循环。Triangle3/Tet4连续P1热后端提供完整配置到全局A、b的GPU组装、稳态求解及后向Euler时间推进。
 
 ## 项目结构
 
@@ -23,7 +23,9 @@ ThermoFEM/
 ├── include/Multigrid/          # GPU 聚合、传输、粗层 LU 与独立循环调度
 ├── include/Smoother/           # 平滑器组件
 ├── include/Preconditioner/     # AMG 与恒等预条件子
-├── include/Solver/             # 分层基类、求解报告与 BiCGStab
+├── include/Solver/             # 分层基类、求解报告、CG与BiCGStab
+├── include/Assembly/           # 通用规范CSR图与GPU稳定散加
+├── include/LinearSystem/       # 系数组合、历史项与对称消元
 ├── test/                      # GoogleTest 测试，.cpp，独立 CMakeLists.txt
 ├── example/                   # CUDA 示例，独立 CMakeLists.txt
 ├── scripts/build-docs.sh       # 一键构建文档
@@ -50,9 +52,9 @@ ThermoFEM/
 ./build/example/case-inspect example/cases/transient.json
 ```
 
-`case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；它会输出几何、自由度、可解性、组装和结果输出等尚未完成的阻断项目。当前尚不能从算例生成A、b或VTU温度结果。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
+`case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；绑定对象列出需后续组件检查的pending项目，不随下游处理修改。使用`solve-case`继续生成A、b并求解；VTU导出属于独立输出职责。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
 
-有限元空间层位于 `include/FiniteElement/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功不代表几何、物理约束或组装检查完成，仍不能从算例生成A、b。
+有限元空间层位于 `include/FiniteElement/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功后仍须由后续组件完成几何、物理约束、组装和系统检查。
 
 ## 几何、条件与局部热运算
 
@@ -181,13 +183,26 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 `include/Mesh/` 提供独立于文件与物理算例的宿主网格模型，`include/IO/Msh.cuh` 提供
 MSH4.1/2.2的ASCII与二进制加载、保存。支持高阶混合单元、实体与物理组、参数坐标、
 周期关系以及分区元数据；保存时检查目标格式的可表示性，不静默丢失信息。
-网格结构不依赖文件版本、编码或求解器，当前尚不包含FEM组装。
+网格结构不依赖文件版本、编码或求解器，网格模块本身不承担FEM组装。
 
 ```sh
 ./build/example/mesh-roundtrip input.msh output.msh binary 4.1
 ```
 
 完整数据契约、限制和使用方式见 [网格与MSH用户手册](docs/mesh.md)。
+
+## 全局热系统
+
+在算例加载、连续P1空间和局部积分准备后，提供独立的符号CSR计划、GPU稳定组装、
+稳态与后向Euler系统构造、对称规定温度消元及分量可解性诊断。
+数值矩阵保留在GPU，采用64位CSR，可直接使用已有CG或BiCGStab求解。
+
+```bash
+./build/example/solve-case example/cases/steady.json
+./build/example/solve-case example/cases/transient.json
+```
+
+接口、数值契约和示例范围见[全局组装与线性系统用户手册](docs/assembly-system.md)。
 
 ## 贡献
 

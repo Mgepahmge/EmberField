@@ -29,6 +29,12 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(solve-matrix solve-matrix.cu)
+add_executable(solve-case solve-case.cu)
+target_link_libraries(solve-case PRIVATE ThermoFEM::thermofem)
+if(BUILD_TESTING)
+    add_test(NAME SystemSteadyIntegration COMMAND solve-case "${CMAKE_CURRENT_SOURCE_DIR}/cases/steady.json")
+    add_test(NAME SystemTransientIntegration COMMAND solve-case "${CMAKE_CURRENT_SOURCE_DIR}/cases/transient.json")
+endif()
 target_link_libraries(solve-matrix PRIVATE ThermoFEM::thermofem)
 if(BUILD_TESTING)
     add_test(NAME MatrixMarketIntegration

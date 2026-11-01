@@ -40,7 +40,7 @@ PreparedConditions组合材料索引、逐单元体源关联、逐侧自然条�
 
 ## GPU批处理
 
-热局部积分有可复用GPU设备表：uploadCellBatch/uploadFacetBatch上传同space、同维数、同局部维数及同规则表；integrate*Batch批量计算，返回CudaBuffer组合的设备矩阵/向量，供未来GPU装配直接消费。数据以实体为首维、矩阵行主序，无原子散加。每个kernel处理整个批次，不逐单元启动。准备/拓扑/冲突检查保留主机端。
+热局部积分有可复用GPU设备表：uploadCellBatch/uploadFacetBatch上传同space、同维数、同局部维数及同规则表；integrate*Batch批量计算，返回CudaBuffer组合的设备矩阵/向量，供[全局GPU组装](assembly-system.md)直接消费。数据以实体为首维、矩阵行主序，无原子散加。每个kernel处理整个批次，不逐单元启动。准备/拓扑/冲突检查保留主机端。
 
 problem::evaluateCellBatch按指定活动行返回GPU K、瞬态M和按定义序累加的源向量；evaluateBoundaryBatch按自然项行处理同类型通量或对流。侧Add多项仍分别计算，不合并h与T∞。调用者按GpuBatchLimits分批，不能要求将任意大网格一次上传；保留批次行映射用于装配。
 
