@@ -12,6 +12,6 @@ endif()
 
 add_executable(thermofem_tests version_test.cpp data_structure_test.cpp linear_algebra_test.cpp solver_test.cpp cg_test.cpp multigrid_operations_test.cpp matrix_market_test.cpp amg_native_test.cpp mesh_test.cpp msh_test.cpp case_test.cpp case_io_test.cpp support/NativeAggregationOracle.cu)
 target_link_libraries(thermofem_tests PRIVATE ThermoFEM::thermofem GTest::gtest_main)
-target_sources(thermofem_tests PRIVATE reference_element_test.cpp finite_element_space_test.cpp temperature_space_test.cpp geometry_integration_test.cpp thermal_element_test.cpp gpu_thermal_test.cpp)
+target_sources(thermofem_tests PRIVATE reference_element_test.cpp finite_element_space_test.cpp temperature_space_test.cpp geometry_integration_test.cpp thermal_element_test.cpp condition_preparation_test.cpp gpu_thermal_test.cpp gpu_preparation_test.cpp)
 include(GoogleTest)
 gtest_discover_tests(thermofem_tests NO_PRETTY_VALUES)

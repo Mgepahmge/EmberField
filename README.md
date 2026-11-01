@@ -54,6 +54,17 @@ ThermoFEM/
 
 有限元空间层位于 `include/FiniteElement/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功不代表几何、物理约束或组装检查完成，仍不能从算例生成A、b。
 
+## 几何、条件与局部热运算
+
+已经支持Triangle3/Tet4的米制仿射几何、体/侧数值积分、独立导热/一致容量/体热源/向外热流/对流运算，以及规定温度与初态的共享DOF一致性检查。批量热积分提供GPU路径，设备表可复用，结果保留在GPU供后续装配消费；几何拓扑和条件检查在主机完成。
+
+```bash
+./build/example/prepare-inspect example/cases/steady.json cpu
+./build/example/prepare-inspect example/cases/transient.json gpu
+```
+
+`prepare-inspect`流式检查全部局部贡献，gpu模式与独立主机路径逐项比较，不是性能基准。使用、单位、错误边界和GPU批次所有权见[热离散准备手册](docs/thermal-preparation.md)。当前仍未进行全局CSR装配、对称温度消元、时间推进或结果场写出；准备通过不表示全局可解或适合CG。
+
 ## 环境要求
 
 - Linux 与 Bash（文档脚本使用 Bash）。
