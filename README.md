@@ -52,6 +52,8 @@ ThermoFEM/
 
 `case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；它会输出几何、自由度、可解性、组装和结果输出等尚未完成的阻断项目。当前尚不能从算例生成A、b或VTU温度结果。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
 
+有限元空间层位于 `include/FiniteElement/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功不代表几何、物理约束或组装检查完成，仍不能从算例生成A、b。
+
 ## 环境要求
 
 - Linux 与 Bash（文档脚本使用 Bash）。
