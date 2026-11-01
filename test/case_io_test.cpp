@@ -2,6 +2,7 @@
  * @brief 验证完整协议、picojson严格适配、精确整数、来源位置与资源限额。
  */
 #include <IO/Case.cuh>
+#include <clocale>
 #include <gtest/gtest.h>
 #include <sstream>
 #include "support/CaseFixture.cuh"
@@ -198,6 +199,23 @@ namespace {
         text = steady();
         replace(text, "\"name\":\"中文算例\"", "\"name\":\"\\uD800\"");
         EXPECT_FALSE(parse(text).definition_);
+    }
+    TEST(CaseIO, PreservesJsonDecimalPointUnderCommaNumericLocale) {
+        /** @brief 只在当前独立测试进程中暂存并恢复数值区域设置。
+         * @code NumericLocaleGuard guard; @endcode */
+        struct NumericLocaleGuard {
+            std::string previous_{std::setlocale(LC_NUMERIC, nullptr)}; ///< 恢复用区域名称。
+            /** @brief 恢复区域设置。@pre 无。@note 无参数无返回值，不抛异常。
+             * @code { NumericLocaleGuard guard; } @endcode */
+            ~NumericLocaleGuard() { std::setlocale(LC_NUMERIC, previous_.c_str()); }
+        } guard;
+        if (!std::setlocale(LC_NUMERIC, "en_DK.utf8")) {
+            GTEST_SKIP() << "逗号数值区域不可用";
+        }
+        ASSERT_STREQ(std::localeconv()->decimal_point, ",");
+        auto result = parse(steady());
+        ASSERT_TRUE(result.definition_);
+        EXPECT_DOUBLE_EQ(result.definition_->analysis_.thickness_.value(), 0.01);
     }
     TEST(CaseIO, ReportsMissingFilesBadStreamsAndInvalidCallLimits) {
         EXPECT_TRUE(hasCode(io::loadCase("/nonexistent/case.json").diagnostics_, "IO_ERROR"));

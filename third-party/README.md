@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | picojson | IO层JSON解析 | 按项目所有者授权原样复制自服务器T-BLAEQ的src/picojson.h；副本未声明精确发布版本，不猜测版本号；上游 https://github.com/kazuho/picojson | BSD-2-Clause，原文见picojson/LICENSE，头文件保留原始声明 |
 
-本项目未修改picojson原文。IO适配器启用PICOJSON_USE_INT64、禁用区域化小数点，使用独立解析上下文拒绝重复键、限制递归与值数量；数字词法预检拒绝超出int64范围的整数，防止picojson回退double损失精度。适配代码位于src/IO/Case.cu，不写入第三方头文件。
+本项目未修改picojson原文。IO适配器启用PICOJSON_USE_INT64，保留库默认的区域设置适配，JSON输入始终使用点号小数；使用独立解析上下文拒绝重复键、限制递归与值数量。数字词法预检拒绝超出int64范围的整数，防止picojson回退double损失精度。适配代码位于src/IO/Case.cu，不写入第三方头文件。
 
 复制依据与哈希：
 

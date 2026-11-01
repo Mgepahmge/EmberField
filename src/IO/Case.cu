@@ -3,7 +3,6 @@
  */
 #include <IO/Case.cuh>
 #define PICOJSON_USE_INT64
-#define PICOJSON_USE_LOCALE 0
 #include <algorithm>
 #include <charconv>
 #include <cmath>
