@@ -150,6 +150,19 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 私钥只存放在受保护的凭据文件和 Actions secret 中，不提交到任一仓库。
 工作流固定 GitHub 的 SSH 主机公钥并启用严格校验；GitHub 轮换主机公钥时需核对官方信息后更新工作流。
 
+## 网格与MSH文件
+
+`include/Mesh/` 提供独立于文件与物理算例的宿主网格模型，`include/IO/Msh.cuh` 提供
+MSH4.1/2.2的ASCII与二进制加载、保存。支持高阶混合单元、实体与物理组、参数坐标、
+周期关系以及分区元数据；保存时检查目标格式的可表示性，不静默丢失信息。
+网格结构不依赖文件版本、编码或求解器，当前尚不包含FEM组装。
+
+```sh
+./build/example/mesh-roundtrip input.msh output.msh binary 4.1
+```
+
+完整数据契约、限制和使用方式见 [网格与MSH用户手册](docs/mesh.md)。
+
 ## 贡献
 
 本项目用于个人本科毕业设计，原则上不接受任何外部贡献，包括代码、文档或其他形式的提交；请勿提交 Pull Request。

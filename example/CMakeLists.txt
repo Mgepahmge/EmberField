@@ -10,6 +10,9 @@ target_link_libraries(example-3 PRIVATE ThermoFEM::thermofem)
 add_executable(example-4 example-4.cu)
 target_link_libraries(example-4 PRIVATE ThermoFEM::thermofem)
 
+add_executable(mesh-roundtrip mesh-roundtrip.cu)
+target_link_libraries(mesh-roundtrip PRIVATE ThermoFEM::thermofem)
+
 add_executable(solve-matrix solve-matrix.cu)
 target_link_libraries(solve-matrix PRIVATE ThermoFEM::thermofem)
 if(BUILD_TESTING)
