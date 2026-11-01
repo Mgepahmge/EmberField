@@ -19,8 +19,10 @@ include(CTest)
 find_package(CUDAToolkit 12.0 REQUIRED)
 option(THERMOFEM_BUILD_EXAMPLES "Build ThermoFEM examples" ON)
 
-add_library(thermofem STATIC src/version.cu src/DataStructure/Memory.cu src/DataStructure/CsrMatrix.cu src/LinearAlgebra/Backend.cu src/LinearAlgebra/IterationContext.cu src/IO/MatrixMarket.cu src/Multigrid/GpuAggregation.cu src/Mesh/Mesh.cu src/IO/Msh.cu)
+add_library(thermofem STATIC src/version.cu src/DataStructure/Memory.cu src/DataStructure/CsrMatrix.cu src/LinearAlgebra/Backend.cu src/LinearAlgebra/IterationContext.cu src/IO/MatrixMarket.cu src/Multigrid/GpuAggregation.cu src/Mesh/Mesh.cu src/IO/Msh.cu
+    src/Case/Diagnostics.cu src/Case/Validation.cu src/Case/Region.cu src/Case/Binding.cu src/Mesh/FacetTopology.cu src/IO/Case.cu)
 add_library(ThermoFEM::thermofem ALIAS thermofem)
+target_include_directories(thermofem SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/picojson")
 target_include_directories(thermofem PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -72,6 +74,9 @@ install(TARGETS thermofem thermofem_cli EXPORT ThermoFEMTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.cuh")
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/ThermoFEM)
+install(FILES third-party/picojson/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/ThermoFEM/picojson)
+install(FILES third-party/picojson/picojson.h DESTINATION ${CMAKE_INSTALL_DATADIR}/ThermoFEM/third-party/picojson)
+install(FILES third-party/README.md DESTINATION ${CMAKE_INSTALL_DATADIR}/ThermoFEM/third-party)
 install(EXPORT ThermoFEMTargets NAMESPACE ThermoFEM:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ThermoFEM)
 configure_package_config_file(cmake/ThermoFEMConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/ThermoFEMConfig.cmake"

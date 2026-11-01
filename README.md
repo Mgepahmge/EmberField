@@ -39,6 +39,19 @@ ThermoFEM/
 
 除测试用例外，所有源文件使用 `.cu`，所有项目头文件使用 `.cuh`。
 
+算例层位于 `include/Case/`，JSON适配位于 `include/IO/Case.cuh`，独立的单元侧拓扑位于 `include/Mesh/FacetTopology.cuh`。配置读取使用随源码分发的 `third-party/picojson/`，无需另外安装JSON包；原始BSD许可证随源码和安装产物保留，不受本项目MIT许可证替代。
+
+## 算例输入与绑定
+
+支持版本1的严格UTF-8 JSON算例配置：稳态/瞬态、二维平面/三维实体、SI单位常物性材料、物理组与并交差区域选择、体源、温度/外向热流/对流边界、初温、时间/离散/求解/输出意图。拒绝重复键、未知字段、错类型与超限输入；物理标签使用精确int64，不经过double。完整协议、默认值与边界见 [算例输入手册](docs/case.md)。
+
+```bash
+./build/example/case-inspect example/cases/steady.json
+./build/example/case-inspect example/cases/transient.json
+```
+
+`case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；它会输出几何、自由度、可解性、组装和结果输出等尚未完成的阻断项目。当前尚不能从算例生成A、b或VTU温度结果。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
+
 ## 环境要求
 
 - Linux 与 Bash（文档脚本使用 Bash）。

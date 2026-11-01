@@ -1,0 +1,27 @@
+$MeshFormat
+2.2 0 8
+$EndMeshFormat
+$PhysicalNames
+5
+2 11 "body"
+1 21 "bottom"
+1 22 "right"
+1 23 "top"
+1 24 "left"
+$EndPhysicalNames
+$Nodes
+4
+5000000001 0 0 0
+8 1000 0 0
+42 1000 1000 0
+7 0 1000 0
+$EndNodes
+$Elements
+6
+400 1 2 21 1 5000000001 8
+401 1 2 22 2 8 42
+402 1 2 23 3 42 7
+403 1 2 24 4 7 5000000001
+100 2 2 11 5 5000000001 8 42
+300 2 2 11 5 5000000001 42 7
+$EndElements

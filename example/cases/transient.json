@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "name": "plate-transient",
+  "mesh": {
+    "path": "plate.msh",
+    "format": "msh",
+    "coordinateScale": 0.001
+  },
+  "analysis": {
+    "type": "transient",
+    "space": "planar2d",
+    "thickness": 0.01,
+    "domain": {
+      "kind": "physicalGroup",
+      "dimension": 2,
+      "tag": 11
+    }
+  },
+  "materials": [
+    {
+      "id": "solid",
+      "conductivity": {
+        "kind": "constant",
+        "value": 15
+      },
+      "density": {
+        "kind": "constant",
+        "value": 7800
+      },
+      "specificHeat": {
+        "kind": "constant",
+        "value": 500
+      }
+    }
+  ],
+  "materialAssignments": [
+    {
+      "id": "body",
+      "region": {
+        "kind": "physicalGroup",
+        "dimension": 2,
+        "tag": 11
+      },
+      "material": "solid"
+    }
+  ],
+  "sources": [
+    {
+      "id": "heating",
+      "region": {
+        "kind": "physicalGroup",
+        "dimension": 2,
+        "tag": 11
+      },
+      "kind": "volumetric",
+      "value": {
+        "kind": "constant",
+        "value": 100000
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "left",
+      "region": {
+        "kind": "physicalGroup",
+        "dimension": 1,
+        "tag": 24
+      },
+      "kind": "temperature",
+      "temperature": {
+        "kind": "constant",
+        "value": 300
+      }
+    },
+    {
+      "id": "right",
+      "region": {
+        "kind": "physicalGroup",
+        "dimension": 1,
+        "tag": 22
+      },
+      "kind": "convection",
+      "coefficient": {
+        "kind": "constant",
+        "value": 20
+      },
+      "ambientTemperature": {
+        "kind": "constant",
+        "value": 293.15
+      }
+    },
+    {
+      "id": "top",
+      "region": {
+        "kind": "physicalGroup",
+        "dimension": 1,
+        "tag": 23
+      },
+      "kind": "outwardFlux",
+      "flux": {
+        "kind": "constant",
+        "value": -10
+      }
+    }
+  ],
+  "boundaryPolicy": {
+    "defaultBoundary": "adiabatic",
+    "naturalOverlap": "error"
+  },
+  "discretization": {
+    "family": "lagrangeContinuous",
+    "order": 1,
+    "quadrature": "auto"
+  },
+  "linearSolver": {
+    "method": "bicgstab",
+    "preconditioner": {
+      "kind": "identity"
+    },
+    "relativeTolerance": 1e-8,
+    "absoluteTolerance": 1e-12,
+    "maxIterations": 1000,
+    "initialGuess": "zero"
+  },
+  "output": {
+    "directory": "results-transient",
+    "format": "vtu",
+    "fields": [
+      "temperature"
+    ],
+    "overwrite": false,
+    "schedule": {
+      "kind": "everySteps",
+      "interval": 10
+    },
+    "includeInitial": true,
+    "includeFinal": true
+  },
+  "initialState": {
+    "defaultTemperature": {
+      "kind": "constant",
+      "value": 300
+    },
+    "overrides": []
+  },
+  "time": {
+    "start": 0,
+    "end": 10,
+    "step": 0.1,
+    "method": "backwardEuler",
+    "maxSteps": 1000
+  }
+}
