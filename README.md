@@ -169,7 +169,7 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 代码格式检查在 push、Pull Request 或手动触发时执行，固定使用 clang-format 23.1.3。
 文档工作流在 main 分支 push 或手动触发时执行，直接调用 Doxygen，无需 CUDA Toolkit。
 
-生成的 HTML 通过 SSH 发布至 [ThermoFEM-Doc](https://github.com/Mgepahmge/ThermoFEM-Doc) 的 gh-pages 分支根目录。
+生成的 HTML 通过 SSH 发布至 [EmberField-Doc](https://github.com/Mgepahmge/EmberField-Doc) 的 gh-pages 分支根目录。
 文档未变化时不创建提交；发布保留分支历史，并清除已删除的页面。
 
 首次配置由仓库维护者完成：
@@ -178,7 +178,7 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 2. 在代码仓库 EmberField 的 Settings → Secrets and variables → Actions 添加名为 `DOCS_DEPLOY_KEY` 的 secret，内容为对应的完整私钥。
 3. 首次工作流创建 gh-pages 分支后，在文档仓库 Settings → Pages 选择 Deploy from a branch，分支 gh-pages，目录 / (root)。
 
-文档站点地址为 <https://mgepahmge.github.io/ThermoFEM-Doc/>。
+文档站点地址为 <https://mgepahmge.github.io/EmberField-Doc/>。
 私钥只存放在受保护的凭据文件和 Actions secret 中，不提交到任一仓库。
 工作流固定 GitHub 的 SSH 主机公钥并启用严格校验；GitHub 轮换主机公钥时需核对官方信息后更新工作流。
 

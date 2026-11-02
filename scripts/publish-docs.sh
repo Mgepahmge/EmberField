@@ -3,7 +3,7 @@
 set -euo pipefail
 
 projectRoot="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-repository="${DOCS_REPOSITORY:-git@github.com:Mgepahmge/ThermoFEM-Doc.git}"
+repository="${DOCS_REPOSITORY:-git@github.com:Mgepahmge/EmberField-Doc.git}"
 branch="${DOCS_BRANCH:-gh-pages}"
 htmlDirectory="$projectRoot/build/docs/html"
 if [[ ! -f "$htmlDirectory/index.html" ]]; then
