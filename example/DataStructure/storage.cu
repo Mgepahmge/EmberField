@@ -28,7 +28,7 @@ namespace {
      */
     void checkCuda(cudaError_t result, const char* operation) {
         if (result != cudaSuccess) {
-            throw thermofem::CudaError(result, operation);
+            throw emberfield::CudaError(result, operation);
         }
     }
 } // namespace
@@ -39,7 +39,7 @@ namespace {
  * @code ./build/example/storage @endcode
  */
 int main() {
-    using namespace thermofem;
+    using namespace emberfield;
     try {
         const std::array<double, 4> input{1, 2, 3, 4};
         const std::array<double, 4> expected{2, 4, 6, 8};

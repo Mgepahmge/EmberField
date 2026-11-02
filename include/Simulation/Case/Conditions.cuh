@@ -4,7 +4,7 @@
 #pragma once
 #include <Simulation/Case/PreparationOptions.cuh>
 #include <Simulation/Case/TemperatureSpace.cuh>
-namespace thermofem::problem {
+namespace emberfield::problem {
     class DirichletConstraints;
     class PreparedConditions;
     class ConditionPreparationResult;
@@ -167,4 +167,4 @@ namespace thermofem::problem {
         std::shared_ptr<const PreparedConditions> conditions_; ///< 仅全成功非空。
         Diagnostics diagnostics_; ///< 限长诊断。
     };
-} // namespace thermofem::problem
+} // namespace emberfield::problem

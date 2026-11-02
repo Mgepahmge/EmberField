@@ -6,7 +6,7 @@
 #include <Simulation/Case/Assembly.cuh>
 #include <limits>
 /** @brief 组合热模型与独立线性系统操作。 */
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 单个编号共现分量的热锚定与载荷兼容性。
      * @details 兼容性仅描述常数零空间的载荷平衡，不替代任意矩阵的正定性认证。
      * @code if(!c.anchored()) inspect(c.netLoad_); @endcode */
@@ -66,4 +66,4 @@ namespace thermofem::problem {
      * @code auto s=nextTimeStep(t,current,completed); @endcode */
     [[nodiscard]] std::optional<TimeStep> nextTimeStep(const TimeOptions& options, double current,
                                                        std::size_t completedSteps);
-} // namespace thermofem::problem
+} // namespace emberfield::problem

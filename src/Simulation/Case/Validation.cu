@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     double evaluate(const ScalarField& field) noexcept { return std::get<ConstantScalar>(field).value_; }
     void validateLimits(const CaseLimits& limits) {
         if (!limits.maxBytes_ || !limits.maxValues_ || !limits.maxStringBytes_ || !limits.maxNesting_ ||
@@ -279,4 +279,4 @@ namespace thermofem::problem {
         }
         return v.report_;
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

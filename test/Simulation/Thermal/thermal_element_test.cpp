@@ -7,7 +7,7 @@
 #include <numeric>
 #include "support/IntegrationFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace thermal;
     using namespace integrationfixture;
     /** @brief 常量点样本。@param q 点数。@param v 值。@pre 无。

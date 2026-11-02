@@ -8,7 +8,7 @@
 #include <stdexcept>
 
 /** @brief 提供内部CUDA错误和设备契约辅助。 */
-namespace thermofem::device {
+namespace emberfield::device {
     /** @brief 检查CUDA调用。@param status 返回码。@pre 无。@note 无返回，失败CudaError。
      * @code check(cudaGetLastError()); @endcode */
     inline void check(cudaError_t status) {
@@ -53,4 +53,4 @@ namespace thermofem::device {
     inline unsigned grid(std::size_t n) {
         return static_cast<unsigned>(std::min<std::size_t>((n - 1) / 128 + 1, 65535));
     }
-} // namespace thermofem::device
+} // namespace emberfield::device

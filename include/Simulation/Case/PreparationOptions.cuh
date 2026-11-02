@@ -4,7 +4,7 @@
 #pragma once
 #include <cstddef>
 #include <limits>
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 调用者控制的数值门槛与资源预算，不覆盖算例中的单位和厚度。
      * @code PreparationOptions o; o.maxCells_=10000; @endcode */
     struct PreparationOptions {
@@ -21,4 +21,4 @@ namespace thermofem::problem {
      * @pre 无。@note 无返回值，非法策略抛invalid_argument。
      * @code validatePreparationOptions(o,2); @endcode */
     void validatePreparationOptions(const PreparationOptions& options, unsigned dimension);
-} // namespace thermofem::problem
+} // namespace emberfield::problem

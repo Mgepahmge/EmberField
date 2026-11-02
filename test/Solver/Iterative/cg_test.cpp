@@ -7,7 +7,7 @@
 
 /** @brief CG 的独立数值与接口测试。 */
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     /** @brief 激活 CUDA 的多精度测试夹具。@code CgTest<double> fixture; @endcode */
     template <linalg::Scalar T>
     class CgTest : public ::testing::Test {

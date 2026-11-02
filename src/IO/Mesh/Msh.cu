@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace thermofem::io {
+namespace emberfield::io {
     namespace {
         using namespace mesh;
         /** @brief 报告带格式上下文的错误。@param message 具体原因。@pre 无。
@@ -1416,4 +1416,4 @@ namespace thermofem::io {
             fail("file write failure " + path.string());
         }
     }
-} // namespace thermofem::io
+} // namespace emberfield::io

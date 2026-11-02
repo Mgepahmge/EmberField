@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-namespace thermofem {
+namespace emberfield {
     /** @brief AMG 循环：V 单次误差校正、W 双次粗校正、F 嵌套初值后 V 校正。 */
     enum class AmgCycle { V, W, F };
     /** @brief 配置 YHAMG-GPU 原生聚合层次和循环。
@@ -113,4 +113,4 @@ namespace thermofem {
         SmootherFactory factory_; ///< 可注入平滑器工厂。
         std::unique_ptr<State> state_; ///< 最近成功状态。
     };
-} // namespace thermofem
+} // namespace emberfield

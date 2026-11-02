@@ -9,7 +9,7 @@
 #include "support/IntegrationFixture.cuh"
 
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace fem;
     using namespace integrationfixture;
     /** @brief 取得几何失败代码。@param m 数据。@param o 策略。@pre 夹具结构合法。

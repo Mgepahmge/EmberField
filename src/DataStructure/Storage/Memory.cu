@@ -7,7 +7,7 @@
 #include <limits>
 #include <utility>
 
-namespace thermofem {
+namespace emberfield {
     namespace detail {
         namespace {
             /** @brief 检查 CUDA 调用结果，失败时抛出异常。
@@ -273,4 +273,4 @@ namespace thermofem {
     CudaError::CudaError(cudaError_t code, const char* operation) :
         std::runtime_error(std::string(operation) + ": " + cudaGetErrorString(code)), code_(code) {}
     cudaError_t CudaError::code() const noexcept { return code_; }
-} // namespace thermofem
+} // namespace emberfield

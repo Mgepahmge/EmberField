@@ -8,7 +8,7 @@
 #include <map>
 
 /** @brief 提供网格格式适配，不把编码或版本状态放入Mesh。 */
-namespace thermofem::io {
+namespace emberfield::io {
     /** @brief MSH输出编码。 */
     enum class MshEncoding { Ascii, Binary };
     /** @brief 输出格式版本；旧版保留逐单元标签，4.1保留丰富实体元数据。 */
@@ -66,4 +66,4 @@ namespace thermofem::io {
      * @return 描述符；未知或未定义二进制布局的类型抛runtime_error。
      * @code auto type=mshElementType(9); @endcode */
     mesh::ElementType mshElementType(int code);
-} // namespace thermofem::io
+} // namespace emberfield::io

@@ -3,7 +3,7 @@
  */
 #pragma once
 #include <Solver/Iterative/SolveResult.cuh>
-namespace thermofem {
+namespace emberfield {
     /** @brief 迭代求解接口，使用传入初值并返回明确的终止报告。
      * @details setup 绑定系数矩阵及配置，apply 负责迭代控制与终止报告。
      * 求解器通过组合持有预条件子，不从预条件子继承，也不依赖具体平滑器。
@@ -26,4 +26,4 @@ namespace thermofem {
          */
         virtual SolveResult<T> apply(const Vector<T>& rhs, Vector<T>& x) = 0;
     };
-} // namespace thermofem
+} // namespace emberfield

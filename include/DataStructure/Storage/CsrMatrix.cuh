@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace thermofem {
+namespace emberfield {
     namespace detail {
         /** @brief 在设备端验证 CSR 结构，仅回传错误标志。
          * @param rows 行数。@param columns 列数。@param count 非零数。@param offsets 行偏移。
@@ -30,7 +30,7 @@ namespace thermofem {
      * const int offsets[]{0, 1, 2};
      * const int columns[]{0, 1};
      * const double entries[]{2.0, 3.0};
-     * thermofem::CsrMatrix<double> matrix(2, 2, offsets, columns, entries);
+     * emberfield::CsrMatrix<double> matrix(2, 2, offsets, columns, entries);
      * @endcode
      */
     template <BufferElement T, CsrIndex Index = std::int32_t>
@@ -38,7 +38,7 @@ namespace thermofem {
     public:
         using ValueType = T; ///< 非零元素类型。
         /** @brief 创建无存储的空矩阵，无参数、无额外约束。@note 无返回值。
-         * @code thermofem::CsrMatrix<double> matrix; @endcode
+         * @code emberfield::CsrMatrix<double> matrix; @endcode
          */
         CsrMatrix() = default;
         /** @brief 验证并接管 GPU 算法生成的三个 global 缓冲区，避免下载整个结构。
@@ -76,7 +76,7 @@ namespace thermofem {
          * @param rows 行数。@param columns 列数。@param rowOffsets 行偏移数组。
          * @param columnIndices 列索引数组。@param values 非零元素数组。@param strategy 内存策略。
          * @pre 偏移从 0 开始单调不减且末项等于非零数，列索引合法，尺寸可由 Index 表示。
-         * @note 无返回值。@code thermofem::CsrMatrix<double> matrix(2, 2, offsets, columns, entries); @endcode
+         * @note 无返回值。@code emberfield::CsrMatrix<double> matrix(2, 2, offsets, columns, entries); @endcode
          */
         CsrMatrix(std::size_t rows, std::size_t columns, std::span<const Index> rowOffsets,
                   std::span<const Index> columnIndices, std::span<const T> values,
@@ -126,7 +126,7 @@ namespace thermofem {
         }
         /** @brief 保留矩阵内容并原地转换全部缓冲区，失败不改变原对象。
          * @param strategy 新策略。@pre 异步访问已结束。@note 无返回值。
-         * @code matrix.changeMemoryType(thermofem::PinnedMemory{}); @endcode
+         * @code matrix.changeMemoryType(emberfield::PinnedMemory{}); @endcode
          */
         void changeMemoryType(MemoryStrategy strategy) {
             if (values_.memoryStrategy().index() == strategy.index()) {
@@ -215,4 +215,4 @@ namespace thermofem {
         CudaBuffer<Index> columnIndices_; ///< 每个非零元素的列索引。
         CudaBuffer<T> values_; ///< 与列索引逐项对应的非零元素值。
     };
-} // namespace thermofem
+} // namespace emberfield

@@ -4,7 +4,7 @@
 #pragma once
 #include <Simulation/Case/Preparation.cuh>
 #include <cmath>
-namespace thermofem::problem::detail {
+namespace emberfield::problem::detail {
     /** @brief 读取唯一厚度因子。@param p 联合对象。@pre 已准备。
      * @return 二维米制厚度或三维1。@code auto s=thermalSectionScale(p); @endcode */
     inline double thermalSectionScale(const PreparedThermalCase& p) {
@@ -26,4 +26,4 @@ namespace thermofem::problem::detail {
         }
         return result;
     }
-} // namespace thermofem::problem::detail
+} // namespace emberfield::problem::detail

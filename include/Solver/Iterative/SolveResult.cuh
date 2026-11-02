@@ -3,7 +3,7 @@
  */
 #pragma once
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
-namespace thermofem {
+namespace emberfield {
     /** @brief 标记求解终止原因。 */
     enum class SolveStatus { Converged, MaxIterations, Breakdown, NonFinite };
     /** @brief 保存真实残差和终止原因。
@@ -16,4 +16,4 @@ namespace thermofem {
         T residualNorm_{}; ///< 最终真实残差二范数。
         T relativeResidual_{}; ///< 相对右端项的残差；零右端项时等于绝对残差。
     };
-} // namespace thermofem
+} // namespace emberfield

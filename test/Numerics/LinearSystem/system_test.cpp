@@ -5,7 +5,7 @@
 #include <limits>
 #include "support/AssemblyFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace assemblyfixture;
     using namespace systems;
     TEST_F(GpuAssembly, BackwardEulerMatchesDenseHistoryBeforeNonzeroElimination) {

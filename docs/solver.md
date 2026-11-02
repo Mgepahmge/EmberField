@@ -73,12 +73,12 @@ F 使用参考代码的嵌套迭代定义，不能用两个 V 代替。W 中第�
 开始，固定次数维持线性，不自动判断收敛。前后平滑次数可以独立为零。
 
 ```cpp
-thermofem::AmgOptions<double> amgOptions;
-amgOptions.cycle_ = thermofem::AmgCycle::F;
+emberfield::AmgOptions<double> amgOptions;
+amgOptions.cycle_ = emberfield::AmgCycle::F;
 amgOptions.preSweeps_ = 1;
 amgOptions.postSweeps_ = 1;
-auto preconditioner = std::make_unique<thermofem::Amg<double>>(amgOptions);
-thermofem::BiCgStab<double> solver({}, std::move(preconditioner));
+auto preconditioner = std::make_unique<emberfield::Amg<double>>(amgOptions);
+emberfield::BiCgStab<double> solver({}, std::move(preconditioner));
 ```
 
 工厂分别为每层前后平滑建立独立实例，避免共享可变缓存；注入工厂时扫描数由其
@@ -97,9 +97,9 @@ setup 以完整临时状态构建，失败保留旧状态。一般非对称、�
 本项目不使用 cuSOLVER。
 
 ```cpp
-thermofem::BiCgStabOptions<double> options;
+emberfield::BiCgStabOptions<double> options;
 options.relativeTolerance_ = 1e-10;
-thermofem::BiCgStab<double> solver(options);
+emberfield::BiCgStab<double> solver(options);
 solver.setup(matrix);
 auto report = solver.apply(rhs, x);
 ```
@@ -130,9 +130,9 @@ BiCGStab 的 setup 失败会清空就绪状态，因为注入预条件子的内�
 ```cpp
 #include <Solver/Iterative/Cg.cuh>
 
-thermofem::CgOptions<double> options;
+emberfield::CgOptions<double> options;
 options.relativeTolerance_ = 1e-10;
-thermofem::Cg<double> solver(options);
+emberfield::Cg<double> solver(options);
 solver.setup(matrix);
 auto report = solver.apply(rhs, x);
 ```
@@ -182,10 +182,10 @@ PCG 要求的是实际应用的近似逆动作 `B: r -> AMG.apply(r)` 固定、�
 
 ```cpp
 // amgOptions 需满足各层权重、对称平滑和粗层求解条件。
-amgOptions.cycle_ = thermofem::AmgCycle::V;
+amgOptions.cycle_ = emberfield::AmgCycle::V;
 amgOptions.preSweeps_ = amgOptions.postSweeps_ = 1;
-auto amg = std::make_unique<thermofem::Amg<double>>(amgOptions);
-thermofem::Cg<double> solver(cgOptions, std::move(amg));
+auto amg = std::make_unique<emberfield::Amg<double>>(amgOptions);
+emberfield::Cg<double> solver(cgOptions, std::move(amg));
 solver.setup(matrix);
 auto report = solver.apply(rhs, x);
 ```

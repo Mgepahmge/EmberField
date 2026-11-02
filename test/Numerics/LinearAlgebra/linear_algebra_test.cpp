@@ -9,8 +9,8 @@
 
 /** @brief 包含浮点精度、内存类型及索引组合的线性代数测试。 */
 namespace {
-    using namespace thermofem;
-    namespace la = thermofem::linalg;
+    using namespace emberfield;
+    namespace la = emberfield::linalg;
 
     /** @brief 建立真实 CUDA 测试环境，设备不可用时明确跳过。
      * @tparam T 浮点精度。@code LinearAlgebraTest<double> fixture; @endcode
@@ -92,7 +92,7 @@ namespace {
     }
 
     /** @brief 验证全部内存类型组合下的向量封装和运算符，无参数。
-     * @pre CUDA 可用。@note 无返回值。@code ./build/test/thermofem_tests --gtest_filter=*vectorArithmetic* @endcode
+     * @pre CUDA 可用。@note 无返回值。@code ./build/test/emberfield_tests --gtest_filter=*vectorArithmetic* @endcode
      */
     TYPED_TEST(LinearAlgebraTest, vectorArithmetic) {
         using T = TypeParam;
@@ -128,7 +128,7 @@ namespace {
     }
 
     /** @brief 验证非方阵行主序、GEMV、GEMM、GEAM 和矩阵运算符，无参数。
-     * @pre CUDA 可用。@note 无返回值。@code ./build/test/thermofem_tests --gtest_filter=*denseArithmetic* @endcode
+     * @pre CUDA 可用。@note 无返回值。@code ./build/test/emberfield_tests --gtest_filter=*denseArithmetic* @endcode
      */
     TYPED_TEST(LinearAlgebraTest, denseArithmetic) {
         using T = TypeParam;
@@ -207,7 +207,7 @@ namespace {
         EXPECT_THROW(a / 0, std::domain_error);
     }
     /** @brief 验证全部稀疏策略及索引组合，无参数。@pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=*sparseArithmetic* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=*sparseArithmetic* @endcode
      */
     TYPED_TEST(LinearAlgebraTest, sparseArithmetic) {
         for (const auto& strategy : supportedStrategies()) {
@@ -217,7 +217,7 @@ namespace {
     }
 
     /** @brief 验证零内维度、零行列、零非零元等边界，无参数。@pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=*zeroDimensions* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=*zeroDimensions* @endcode
      */
     TYPED_TEST(LinearAlgebraTest, zeroDimensions) {
         using T = TypeParam;
@@ -251,7 +251,7 @@ namespace {
     }
 
     /** @brief 验证形状、除零和尺寸范围错误在运算前被拒绝，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=LinearAlgebraValidation.invalidShapes @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=LinearAlgebraValidation.invalidShapes @endcode
      */
     TEST(LinearAlgebraValidation, invalidShapes) {
         Vector<double> x, y;
@@ -267,7 +267,7 @@ namespace {
     }
 
     /** @brief 验证运算设备切换及跨设备拒绝，无参数。@pre 两个设备可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=*deviceOwnership* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=*deviceOwnership* @endcode
      */
     TYPED_TEST(LinearAlgebraTest, deviceOwnership) {
         using T = TypeParam;

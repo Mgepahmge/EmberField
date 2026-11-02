@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <iterator>
 #include <stdexcept>
-namespace thermofem::problem {
+namespace emberfield::problem {
     PhysicalMembership buildPhysicalMembership(const mesh::Mesh& mesh, std::size_t maxEntries) {
         if (!maxEntries) {
             throw std::invalid_argument("分组索引限额必须为正");
@@ -157,4 +157,4 @@ namespace thermofem::problem {
         }
         return {std::move(cells), std::move(resolver.report_)};
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

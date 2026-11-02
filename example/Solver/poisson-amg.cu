@@ -9,7 +9,7 @@
  * @code ./poisson-amg @endcode
  */
 int main() {
-    using namespace thermofem;
+    using namespace emberfield;
     constexpr int side = 16, n = side * side;
     std::vector<int> offsets{0}, columns;
     std::vector<double> entries, b(n), initial(n, 0);

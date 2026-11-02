@@ -7,7 +7,7 @@
 #include <numeric>
 #include "support/CaseFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace problem;
     using namespace casefixture;
     /** @brief 创建联合准备结果。@param c 定义。@param m 网格。@param o 策略。

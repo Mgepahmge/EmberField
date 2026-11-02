@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace thermofem {
+namespace emberfield {
     /// 限定可按字节传输且不需要运行构造、析构函数的非 cv 元素。
     template <class T>
     concept BufferElement = std::is_trivially_copyable_v<T> && std::is_trivially_default_constructible_v<T> &&
@@ -21,27 +21,27 @@ namespace thermofem {
      * @details 同步复制接口要求调用方先完成外部异步读写。数据指针遵循当前内存类型的
      * 可访问性，传入内核时使用 deviceData()；类型转换会使已有指针失效。
      * @code
-     * thermofem::CudaBuffer<double> values(3, thermofem::PinnedMemory{});
+     * emberfield::CudaBuffer<double> values(3, emberfield::PinnedMemory{});
      * values.hostData()[0] = 1.0;
-     * values.changeMemoryType(thermofem::GlobalMemory{});
+     * values.changeMemoryType(emberfield::GlobalMemory{});
      * @endcode
      */
     template <BufferElement T>
     class CudaBuffer {
     public:
         /** @brief 创建空缓冲区。@param strategy 内存策略。@pre 无额外约束。@note 无返回值。
-         * @code thermofem::CudaBuffer<double> buffer; @endcode
+         * @code emberfield::CudaBuffer<double> buffer; @endcode
          */
         explicit CudaBuffer(MemoryStrategy strategy = GlobalMemory{}) noexcept : storage_(strategy) {}
         /** @brief 分配指定数量的未初始化元素。@param count 元素数。@param strategy 内存策略。
          * @pre 字节数不溢出，非零分配需要 CUDA。@note 无返回值。
-         * @code thermofem::CudaBuffer<double> buffer(10); @endcode
+         * @code emberfield::CudaBuffer<double> buffer(10); @endcode
          */
         explicit CudaBuffer(std::size_t count, MemoryStrategy strategy = GlobalMemory{}) :
             storage_(detail::checkedProduct(count, sizeof(T)), strategy) {}
         /** @brief 从主机数组构造缓冲区。@param values 主机元素。@param strategy 内存策略。
          * @pre values 有效，非零分配需要 CUDA。@note 无返回值。
-         * @code thermofem::CudaBuffer<double> buffer(std::span<const double>(values)); @endcode
+         * @code emberfield::CudaBuffer<double> buffer(std::span<const double>(values)); @endcode
          */
         explicit CudaBuffer(std::span<const T> values, MemoryStrategy strategy = GlobalMemory{}) :
             CudaBuffer(values.size(), strategy) {
@@ -64,7 +64,7 @@ namespace thermofem {
          */
         CudaBuffer& operator=(CudaBuffer&& other) noexcept = default;
         /** @brief 自动释放资源，无参数。@pre 外部异步访问已结束。@note 无返回值。
-         * @code { thermofem::CudaBuffer<double> buffer; } @endcode
+         * @code { emberfield::CudaBuffer<double> buffer; } @endcode
          */
         ~CudaBuffer() = default;
         /** @brief 同步复制全部数据而保留目标类型及地址。@param other 来源。
@@ -74,7 +74,7 @@ namespace thermofem {
         void copyDataFrom(const CudaBuffer& other) { storage_.copyDataFrom(other.storage_); }
         /** @brief 保留数据并转换内存类型，失败不改变对象。@param strategy 新策略。
          * @pre 异步访问已结束。@note 无返回值。
-         * @code buffer.changeMemoryType(thermofem::MappedMemory{}); @endcode
+         * @code buffer.changeMemoryType(emberfield::MappedMemory{}); @endcode
          */
         void changeMemoryType(MemoryStrategy strategy) { storage_.changeMemoryType(strategy); }
         /** @brief 从主机同步导入全部元素。@param values 主机数组。
@@ -147,4 +147,4 @@ namespace thermofem {
     private:
         detail::MemoryStorage storage_; ///< 负责字节存储、设备归属和策略的 RAII 对象。
     };
-} // namespace thermofem
+} // namespace emberfield

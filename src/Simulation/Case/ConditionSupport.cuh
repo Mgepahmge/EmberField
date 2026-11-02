@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-namespace thermofem::problem::detail {
+namespace emberfield::problem::detail {
     /** @brief 添加准备错误。@param d 诊断。@param code 稳定码。@param message 中文说明。
      * @param id 配置id。@param tag 可选网格tag。@pre 无。@note 追加无返回，系统异常传播。
      * @code issue(d,"CONTEXT","空间错配"); @endcode */
@@ -73,4 +73,4 @@ namespace thermofem::problem::detail {
         }
         return t == 0 ? 0 : t;
     }
-} // namespace thermofem::problem::detail
+} // namespace emberfield::problem::detail

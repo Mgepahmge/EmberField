@@ -3,7 +3,7 @@
  */
 #pragma once
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
-namespace thermofem {
+namespace emberfield {
     /** @brief 提供求解组件共享的矩阵和向量前置条件检查。 */
     namespace iteration {
         /** @brief 检查非空方阵。@tparam T 精度。@tparam I 索引。@param matrix 输入。
@@ -27,4 +27,4 @@ namespace thermofem {
             linalg::detail::commonDevice({device, rhs.deviceId(), x.deviceId()});
         }
     } // namespace iteration
-} // namespace thermofem
+} // namespace emberfield

@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     TEST(ReferenceElement, NodalInterpolationAndEmptyBatch) {
         for (auto family : {mesh::CellFamily::Triangle, mesh::CellFamily::Tetrahedron}) {
             const fem::ElementKey key{family};

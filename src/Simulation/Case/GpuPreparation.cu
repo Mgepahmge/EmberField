@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include "ThermalSampling.cuh"
-namespace thermofem::problem {
+namespace emberfield::problem {
     namespace {
         /** @brief 在分配积分表前检查实体及平坦数组预算。@param count 实体数。
          * @param scalars 每实体最大数组长度。@param limits 预算。@pre 无。
@@ -112,4 +112,4 @@ namespace thermofem::problem {
         return GpuThermalBoundaryTerms({rows.begin(), rows.end()},
                                        thermal::integrateConvectionBatch(batch, samples, ambient, scales));
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

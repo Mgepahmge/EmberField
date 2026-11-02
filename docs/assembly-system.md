@@ -11,9 +11,9 @@ problem::buildThermalAssemblyPlan、assembleThermalModel只负责将既有准备
 GPU局部积分与上述通用运算组合，不在算例层重写数值内核。
 
 ~~~cpp
-auto plan = thermofem::problem::buildThermalAssemblyPlan(prepared);
-auto model = thermofem::problem::assembleThermalModel(plan);
-auto system = thermofem::problem::buildThermalSteadySystem(model);
+auto plan = emberfield::problem::buildThermalAssemblyPlan(prepared);
+auto model = emberfield::problem::assembleThermalModel(plan);
+auto system = emberfield::problem::buildThermalSteadySystem(model);
 // system.matrix()和system.rhs()可直接交给已有Cg/BiCgStab。
 ~~~
 

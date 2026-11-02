@@ -4,7 +4,7 @@
 #pragma once
 #include <DataStructure/Storage/CudaBuffer.cuh>
 #include <Simulation/Thermal/ElementOperations.cuh>
-namespace thermofem::thermal {
+namespace emberfield::thermal {
     namespace detail {
         class GpuBatchAccess;
         struct GpuBatchIdentity;
@@ -185,4 +185,4 @@ namespace thermofem::thermal {
     [[nodiscard]] GpuLocalVectorBatch addLocalVectorBatches(const GpuElementBatch& batch,
                                                             const GpuLocalVectorBatch& left,
                                                             const GpuLocalVectorBatch& right);
-} // namespace thermofem::thermal
+} // namespace emberfield::thermal

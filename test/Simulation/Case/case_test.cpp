@@ -6,7 +6,7 @@
 #include <limits>
 #include "support/CaseFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace problem;
     using namespace casefixture;
     TEST(CaseDefinition, SupportsProgrammaticSteadyAndTransientWithoutFiles) {

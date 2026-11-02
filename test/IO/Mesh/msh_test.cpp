@@ -11,8 +11,8 @@
 #include <sstream>
 #include <stdexcept>
 namespace {
-    using namespace thermofem::mesh;
-    using namespace thermofem::io;
+    using namespace emberfield::mesh;
+    using namespace emberfield::io;
     /** @brief 提供手写4.1输入。@pre 无。@return 文本。
      * @code auto input=fixture(); @endcode */
     std::string fixture() {
@@ -246,7 +246,7 @@ $EndPeriodic
     }
     TEST(Msh, PreservesExistingFileWhenPreflightFails) {
         const auto path = std::filesystem::temp_directory_path() /
-            ("thermofem-preflight-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+            ("emberfield-preflight-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
              ".msh");
         {
             std::ofstream out(path);

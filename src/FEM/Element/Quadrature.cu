@@ -4,7 +4,7 @@
 #include <FEM/Element/Quadrature.cuh>
 #include <cmath>
 #include <stdexcept>
-namespace thermofem::fem {
+namespace emberfield::fem {
     const QuadratureRule& quadratureRule(mesh::CellFamily family, unsigned degree) {
         using F = mesh::CellFamily;
         if (degree > 2 || (family != F::Segment && family != F::Triangle && family != F::Tetrahedron)) {
@@ -30,4 +30,4 @@ namespace thermofem::fem {
         }
         return degree <= 1 ? tet1 : tet2;
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

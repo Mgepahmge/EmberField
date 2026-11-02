@@ -7,7 +7,7 @@
 #include <Solver/Preconditioner/Amg.cuh>
 #include <cmath>
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 配置求解容差、迭代上限及真实残差刷新周期。
      * @code BiCgStabOptions<double> options; options.relativeTolerance_ = 1e-10; @endcode
      */
@@ -252,4 +252,4 @@ namespace thermofem {
         std::unique_ptr<Preconditioner<T, I>> preconditioner_; ///< 独立的可替换预条件组件。
         std::unique_ptr<State> state_; ///< 当前 setup 对应的状态。
     };
-} // namespace thermofem
+} // namespace emberfield

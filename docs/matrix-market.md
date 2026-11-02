@@ -2,7 +2,7 @@
 
 ## 输入格式
 
-`<IO/Matrix/MatrixMarket.cuh>` 提供 `thermofem::io::readMatrixMarket`，从输入流读取
+`<IO/Matrix/MatrixMarket.cuh>` 提供 `emberfield::io::readMatrixMarket`，从输入流读取
 Matrix Market 坐标格式，返回主机端 `HostCsr`，供数据结构和求解组件使用。
 
 支持实数或整数条目，以及 general 和 symmetric 矩阵。读取时检查文件头、
@@ -18,8 +18,8 @@ std::ifstream input("data/matrix.mtx");
 if (!input) {
     throw std::runtime_error("Cannot open matrix file");
 }
-const auto host = thermofem::io::readMatrixMarket(input);
-thermofem::CsrMatrix<double> matrix(
+const auto host = emberfield::io::readMatrixMarket(input);
+emberfield::CsrMatrix<double> matrix(
     host.rows_, host.columns_, host.offsets_, host.indices_, host.values_);
 ```
 
@@ -28,7 +28,7 @@ thermofem::CsrMatrix<double> matrix(
 
 ## 命令行示例
 
-启用 `THERMOFEM_BUILD_EXAMPLES` 时构建 `solve-matrix`。在项目根目录执行：
+启用 `EMBERFIELD_BUILD_EXAMPLES` 时构建 `solve-matrix`。在项目根目录执行：
 
 ```bash
 ./build/example/solve-matrix data/matrix.mtx amg v

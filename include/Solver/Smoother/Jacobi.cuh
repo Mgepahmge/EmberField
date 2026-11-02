@@ -7,7 +7,7 @@
 #include <Solver/Smoother/Smoother.cuh>
 #include <cmath>
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 复用逆对角线和向量缓存执行加权 Jacobi；实例不可并发调用。
      * @details setup 保存矩阵快照；失败后保留原状态。输入输出允许别名，支持所有内存策略。
      * @par 算法与职责
@@ -92,4 +92,4 @@ namespace thermofem {
         T weight_; ///< 松弛系数。
         std::unique_ptr<State> state_; ///< setup 成功后建立的独占状态。
     };
-} // namespace thermofem
+} // namespace emberfield

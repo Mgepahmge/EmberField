@@ -5,7 +5,7 @@
 #include <FEM/Space/Space.cuh>
 #include <Simulation/Case/Binding.cuh>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 温度空间准备结果；成功仅证明编号完成，不代表算例可执行。
      * @code if(result.space_) inspect(result.space_->dofCount()); @endcode */
     struct TemperatureSpaceResult {
@@ -20,4 +20,4 @@ namespace thermofem::problem {
      * @note 不提前要求整个capability可执行，也不删除共享DOF条件尚未检查的待检项。
      * @code auto r=buildTemperatureSpace(*binding.bound_); @endcode */
     [[nodiscard]] TemperatureSpaceResult buildTemperatureSpace(const BoundCase& bound, fem::SpaceLimits limits = {});
-} // namespace thermofem::problem
+} // namespace emberfield::problem

@@ -6,7 +6,7 @@
 #include <cmath>
 #include <numeric>
 #include "../../Numerics/LinearAlgebra/DeviceChecks.cuh"
-namespace thermofem::assembly {
+namespace emberfield::assembly {
     namespace {
         /** @brief 一个目标线程顺序归约局部条目。@param n 目标数。@param targets 目标槽。
          * @param offsets 贡献分段。@param sources 原始局部下标。@param input 输入。
@@ -111,4 +111,4 @@ namespace thermofem::assembly {
         device::check(cudaGetLastError());
         device::check(cudaStreamSynchronize(nullptr));
     }
-} // namespace thermofem::assembly
+} // namespace emberfield::assembly

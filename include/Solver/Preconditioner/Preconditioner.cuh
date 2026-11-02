@@ -3,7 +3,7 @@
  */
 #pragma once
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
-namespace thermofem {
+namespace emberfield {
     /** @brief 预条件接口，apply 覆盖输出，不依赖其原值。
      * @details 表示 z=M^-1*rhs 的动作，不要求显式存储 M。预条件子可以组合平滑器、
      * 多层矩阵和粗层求解器，外层求解器只依赖此接口。
@@ -27,4 +27,4 @@ namespace thermofem {
          */
         virtual void apply(const Vector<T>& rhs, Vector<T>& x) = 0;
     };
-} // namespace thermofem
+} // namespace emberfield

@@ -5,7 +5,7 @@
 #include <DataStructure/Mesh/Mesh.cuh>
 
 /** @brief 提供参考有限元、形函数和不施加物理约束的自由度空间。 */
-namespace thermofem::fem {
+namespace emberfield::fem {
     /** @brief 基函数族；当前仅支持连续节点型Lagrange。 */
     enum class BasisFamily { ContinuousLagrange };
     /** @brief 有限元键；温度阶次不等于网格几何阶次。
@@ -81,4 +81,4 @@ namespace thermofem::fem {
      * overflow_error有限坐标导致求值溢出；分配异常传播，失败不发布部分表。
      * @code auto table=evaluateBasis(key,referenceElement(key).interpolationPoints()); @endcode */
     [[nodiscard]] BasisTable evaluateBasis(const ElementKey& key, std::span<const std::array<double, 3>> points);
-} // namespace thermofem::fem
+} // namespace emberfield::fem

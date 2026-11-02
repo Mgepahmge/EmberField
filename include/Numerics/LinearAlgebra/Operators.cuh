@@ -4,7 +4,7 @@
 #pragma once
 #include <Numerics/LinearAlgebra/Operations.cuh>
 
-namespace thermofem {
+namespace emberfield {
     /// 限定为具有受支持浮点类型和线性代数缩放接口的数据结构。
     template <class T>
     concept LinearObject = requires(const T& value) {
@@ -122,4 +122,4 @@ namespace thermofem {
         left = left * right;
         return left;
     }
-} // namespace thermofem
+} // namespace emberfield

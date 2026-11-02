@@ -6,7 +6,7 @@
 #include <FEM/Space/Space.cuh>
 #include <limits>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     /** @brief 坐标解释，不把任意嵌入曲面自动当平面。 */
     enum class GeometryFrame { PlanarXY, SolidXYZ };
     /** @brief 坐标与数值质量选项；入口统一验证。
@@ -175,4 +175,4 @@ namespace thermofem::fem {
         mesh::FacetTopology topology_; ///< 活动侧拓扑。
         std::vector<std::optional<FacetGeometry>> exterior_; ///< 仅外侧槽有记录。
     };
-} // namespace thermofem::fem
+} // namespace emberfield::fem

@@ -13,7 +13,7 @@
 namespace {
     /** @brief 输出诊断摘要。@param report 算例诊断。@pre 无。
      * @note 无返回值。@code printDiagnostics(r.diagnostics_); @endcode */
-    void printDiagnostics(const thermofem::problem::Diagnostics& report) {
+    void printDiagnostics(const emberfield::problem::Diagnostics& report) {
         for (const auto& d : report.entries()) {
             std::cerr << d.code_ << ": " << d.message_ << '\n';
         }
@@ -24,12 +24,12 @@ namespace {
     /** @brief 以持久单元tag和局部顺序记录DOF关联的节点tag。
      * @param space 有效P1空间。@pre 每个DOF关联节点。
      * @return 记录数组；用于跨网格存储重排对比。@code auto ids=identities(space); @endcode */
-    std::vector<std::pair<thermofem::mesh::Tag, std::vector<thermofem::mesh::Tag>>>
-    identities(const thermofem::fem::FiniteElementSpace& space) {
-        std::vector<std::pair<thermofem::mesh::Tag, std::vector<thermofem::mesh::Tag>>> result;
+    std::vector<std::pair<emberfield::mesh::Tag, std::vector<emberfield::mesh::Tag>>>
+    identities(const emberfield::fem::FiniteElementSpace& space) {
+        std::vector<std::pair<emberfield::mesh::Tag, std::vector<emberfield::mesh::Tag>>> result;
         for (std::size_t e = 0; e < space.cellCount(); ++e) {
             const auto cell = space.cells()[e];
-            std::vector<thermofem::mesh::Tag> nodes;
+            std::vector<emberfield::mesh::Tag> nodes;
             for (auto dof : space.cellDofs(e)) {
                 nodes.push_back(space.mesh().data().nodes_.at(*space.dofInfo(dof).node_).tag_);
             }
@@ -44,7 +44,7 @@ namespace {
  * @return 0为空间检查通过（不表示可求解），2为输入/能力错误，1为异常或映射不一致。
  * @code ./space-inspect example/cases/steady.json build/space-roundtrip.msh @endcode */
 int main(int argc, char** argv) {
-    using namespace thermofem;
+    using namespace emberfield;
     if (argc != 2 && argc != 3) {
         std::cerr << "用法: space-inspect <case.json> [roundtrip.msh]\n";
         return 2;

@@ -7,7 +7,7 @@
 #include <string>
 #include <type_traits>
 
-namespace thermofem::linalg::detail {
+namespace emberfield::linalg::detail {
     /** @brief 包含库错误检查、描述符及精度分派等内部实现。 */
     namespace {
         /** @brief 检查 CUDA 结果。@param status 状态。@param operation 操作。@pre 名称有效。
@@ -415,7 +415,7 @@ namespace thermofem::linalg::detail {
     }
 
 // 后端仅为受支持的精度及索引组合生成链接符号。
-#define THERMOFEM_INSTANTIATE(T)                                                                                       \
+#define EMBERFIELD_INSTANTIATE(T)                                                                                      \
     template void blasScale<T>(int, T, T*);                                                                            \
     template void blasAxpy<T>(int, T, const T*, T*);                                                                   \
     template T blasDot<T>(int, const T*, const T*);                                                                    \
@@ -430,7 +430,7 @@ namespace thermofem::linalg::detail {
     template SparseHostData<T> sparseAdd<T>(const CsrMatrix<T, int>&, const CsrMatrix<T, int>&, T);                    \
     template SparseHostData<T> sparseTranspose<T>(const CsrMatrix<T, int>&);                                           \
     template SparseHostData<T> sparseGemm<T>(const CsrMatrix<T, int>&, const CsrMatrix<T, int>&);
-    THERMOFEM_INSTANTIATE(float)
-    THERMOFEM_INSTANTIATE(double)
-#undef THERMOFEM_INSTANTIATE
-} // namespace thermofem::linalg::detail
+    EMBERFIELD_INSTANTIATE(float)
+    EMBERFIELD_INSTANTIATE(double)
+#undef EMBERFIELD_INSTANTIATE
+} // namespace emberfield::linalg::detail

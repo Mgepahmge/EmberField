@@ -10,7 +10,7 @@
 
 /** @brief 包含求解器解析解与异常路径测试。 */
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     /** @brief CUDA 求解测试环境。
      * @code SolverTest<double> fixture; @endcode
      */

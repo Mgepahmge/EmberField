@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
 
     /** @brief 构造供生命周期测试使用的短对角占优矩阵。
      * @tparam T 浮点精度。@tparam I CSR 索引。

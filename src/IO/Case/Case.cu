@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace thermofem::io {
+namespace emberfield::io {
     namespace {
         using namespace problem;
         using Json = picojson::value;
@@ -829,4 +829,4 @@ namespace thermofem::io {
         }
         return readCase(input, absolute.parent_path(), absolute.string(), limits);
     }
-} // namespace thermofem::io
+} // namespace emberfield::io

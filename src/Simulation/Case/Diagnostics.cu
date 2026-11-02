@@ -4,7 +4,7 @@
 #include <Simulation/Case/Diagnostics.cuh>
 #include <stdexcept>
 #include <utility>
-namespace thermofem::problem {
+namespace emberfield::problem {
     Diagnostics::Diagnostics(std::size_t limit) : limit_(limit) {
         if (limit == 0) {
             throw std::invalid_argument("诊断限额必须大于0");
@@ -31,4 +31,4 @@ namespace thermofem::problem {
         }
         omitted_ += other.omitted_;
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

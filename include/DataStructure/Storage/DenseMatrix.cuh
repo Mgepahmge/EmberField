@@ -5,15 +5,15 @@
 
 #include <DataStructure/Storage/CudaBuffer.cuh>
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 按行主序存储稠密矩阵，并保持维度与缓冲区大小一致。
      * @tparam T 满足 BufferElement 的元素类型。
      * @details 索引 (row, column) 对应 row * columnCount() + column。
      * 复制及移动采用来源策略；移动后的来源为 0 行 0 列。
      * @code
-     * thermofem::DenseMatrix<double> matrix(2, 3, thermofem::PinnedMemory{});
+     * emberfield::DenseMatrix<double> matrix(2, 3, emberfield::PinnedMemory{});
      * matrix.at(0, 1) = 2.0;
-     * matrix.changeMemoryType(thermofem::GlobalMemory{});
+     * matrix.changeMemoryType(emberfield::GlobalMemory{});
      * @endcode
      */
     template <BufferElement T>
@@ -21,12 +21,12 @@ namespace thermofem {
     public:
         using ValueType = T; ///< 矩阵元素类型。
         /** @brief 创建空矩阵，无参数、无额外约束。@note 无返回值。
-         * @code thermofem::DenseMatrix<double> matrix; @endcode
+         * @code emberfield::DenseMatrix<double> matrix; @endcode
          */
         DenseMatrix() = default;
         /** @brief 分配未初始化矩阵。@param rows 行数。@param columns 列数。@param strategy 内存策略。
          * @pre 元素数和字节数不溢出，非空分配需要 CUDA。@note 无返回值。
-         * @code thermofem::DenseMatrix<double> matrix(2, 3); @endcode
+         * @code emberfield::DenseMatrix<double> matrix(2, 3); @endcode
          */
         DenseMatrix(std::size_t rows, std::size_t columns, MemoryStrategy strategy = GlobalMemory{}) :
             rowCount_(rows), columnCount_(columns), values_(detail::checkedProduct(rows, columns), strategy) {}
@@ -77,7 +77,7 @@ namespace thermofem {
             values_.copyDataFrom(other.values_);
         }
         /** @brief 保留形状与数据，转换内存类型。@param strategy 新策略。@pre 异步访问已结束。
-         * @note 无返回值。@code matrix.changeMemoryType(thermofem::MappedMemory{}); @endcode
+         * @note 无返回值。@code matrix.changeMemoryType(emberfield::MappedMemory{}); @endcode
          */
         void changeMemoryType(MemoryStrategy strategy) { values_.changeMemoryType(strategy); }
         /** @brief 从主机按行主序导入全部元素。@param values 主机数组。@pre 元素数匹配且异步访问已结束。
@@ -137,4 +137,4 @@ namespace thermofem {
         std::size_t columnCount_{}; ///< 矩阵列数。
         CudaBuffer<T> values_; ///< 行主序元素存储。
     };
-} // namespace thermofem
+} // namespace emberfield

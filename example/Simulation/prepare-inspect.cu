@@ -13,7 +13,7 @@
 namespace {
     /** @brief 输出限长诊断。@param d 诊断。@pre 无。@note 无返回值。
      * @code printDiagnostics(r.diagnostics()); @endcode */
-    void printDiagnostics(const thermofem::problem::Diagnostics& d) {
+    void printDiagnostics(const emberfield::problem::Diagnostics& d) {
         for (const auto& x : d.entries()) {
             std::cerr << x.code_ << ": " << x.message_ << '\n';
         }
@@ -36,16 +36,16 @@ namespace {
     /** @brief 流式求值并核对所有体项，不持久缓存全域稠密矩阵。
      * @param p 联合准备。@param gpu 是否GPU对照。@pre 来源有效。
      * @return 合计体源功率W。@code auto f=cells(p,true); @endcode */
-    double cells(const thermofem::problem::PreparedThermalCase& p, bool gpu) {
+    double cells(const emberfield::problem::PreparedThermalCase& p, bool gpu) {
         double load = 0;
         for (std::size_t begin = 0; begin < p.space()->cellCount(); begin += 4096) {
             const auto count = std::min<std::size_t>(4096, p.space()->cellCount() - begin);
             std::vector<std::size_t> rows(count);
             std::iota(rows.begin(), rows.end(), begin);
-            std::optional<thermofem::problem::GpuThermalCellTerms> batch;
+            std::optional<emberfield::problem::GpuThermalCellTerms> batch;
             std::vector<double> k, m, f;
             if (gpu) {
-                batch = thermofem::problem::evaluateCellBatch(p, rows);
+                batch = emberfield::problem::evaluateCellBatch(p, rows);
                 k = batch->conductivity().copyToHost();
                 f = batch->load().copyToHost();
                 if (batch->capacity()) {
@@ -53,7 +53,7 @@ namespace {
                 }
             }
             for (std::size_t e = 0; e < count; ++e) {
-                const auto host = thermofem::problem::evaluateCellTerms(p, rows[e]);
+                const auto host = emberfield::problem::evaluateCellTerms(p, rows[e]);
                 if (gpu) {
                     compare(k, e, host.conductivity().entries());
                     compare(f, e, host.load().entries());
@@ -68,8 +68,8 @@ namespace {
     }
     /** @brief 按类型流式核对自然侧项。@param p 联合上下文。@param gpu 是否GPU对照。
      * @pre 来源不变。@note 无返回，错误抛异常。@code boundaries(p,true); @endcode */
-    void boundaries(const thermofem::problem::PreparedThermalCase& p, bool gpu) {
-        using namespace thermofem;
+    void boundaries(const emberfield::problem::PreparedThermalCase& p, bool gpu) {
+        using namespace emberfield;
         const auto& terms = p.conditions()->naturalTerms();
         for (bool flux : {true, false}) {
             std::vector<std::size_t> rows;
@@ -122,7 +122,7 @@ namespace {
  * @pre 无。@return 0通过、2输入/准备失败、1运行异常；通过不代表全局可解。
  * @code ./prepare-inspect example/cases/transient.json gpu @endcode */
 int main(int argc, char** argv) {
-    using namespace thermofem;
+    using namespace emberfield;
     if (argc < 2 || argc > 3 || (argc == 3 && std::string(argv[2]) != "cpu" && std::string(argv[2]) != "gpu")) {
         std::cerr << "用法: prepare-inspect <case.json> [cpu|gpu]（默认gpu）\n";
         return 2;

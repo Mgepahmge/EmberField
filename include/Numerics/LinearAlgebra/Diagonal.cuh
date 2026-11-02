@@ -4,7 +4,7 @@
 #pragma once
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <cmath>
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     /** @brief 提取并校验方阵的逆对角线，合并重复项。
      * @tparam T 精度。@tparam I 索引。@param matrix 输入方阵。
      * @pre 非空方阵，对角线非零、有限且倒数有限。@return global 逆对角线向量。
@@ -34,4 +34,4 @@ namespace thermofem::linalg {
         }
         return Vector<T>{std::span<const T>(inverse)};
     }
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

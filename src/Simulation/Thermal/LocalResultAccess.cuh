@@ -5,7 +5,7 @@
 #include <Simulation/Thermal/ElementOperations.cuh>
 #include <algorithm>
 #include <cmath>
-namespace thermofem::thermal::detail {
+namespace emberfield::thermal::detail {
     /** @brief 校验局部结果后接管；主机积分和GPU回读共用。
      * @code auto m=LocalResultAccess::matrix(n,std::move(values)); @endcode */
     class LocalResultAccess {
@@ -36,4 +36,4 @@ namespace thermofem::thermal::detail {
             return ConvectionContribution(std::move(m), std::move(v));
         }
     };
-} // namespace thermofem::thermal::detail
+} // namespace emberfield::thermal::detail

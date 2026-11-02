@@ -5,7 +5,7 @@
 #include <DataStructure/Mesh/FacetTopology.cuh>
 #include <stdexcept>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     /** @brief 可解释的几何和数值失败种类。 */
     enum class EvaluationCode {
         CoordinateRange,
@@ -61,4 +61,4 @@ namespace thermofem::fem {
         std::optional<std::size_t> quadraturePoint_; ///< 积分点。
         std::optional<std::size_t> localDof_; ///< 局部自由度。
     };
-} // namespace thermofem::fem
+} // namespace emberfield::fem

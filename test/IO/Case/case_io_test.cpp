@@ -7,7 +7,7 @@
 #include <sstream>
 #include "support/CaseFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace casefixture;
     /** @brief 创建含全部主要字段的完整JSON。@pre 无。
      * @return 合法稳态配置。@code auto text=steady(); @endcode */

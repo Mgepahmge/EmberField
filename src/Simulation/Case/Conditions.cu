@@ -8,7 +8,7 @@
 #include <sstream>
 #include <tuple>
 #include "ConditionSupport.cuh"
-namespace thermofem::problem {
+namespace emberfield::problem {
     void validatePreparationOptions(const PreparationOptions& o, unsigned d) {
         fem::GeometryOptions g;
         g.frame_ = d == 2 ? fem::GeometryFrame::PlanarXY : fem::GeometryFrame::SolidXYZ;
@@ -379,4 +379,4 @@ namespace thermofem::problem {
         }
         return result;
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

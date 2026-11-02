@@ -4,7 +4,7 @@
 #pragma once
 #include <FEM/Element/Integration.cuh>
 
-namespace thermofem::thermal {
+namespace emberfield::thermal {
     namespace detail {
         class LocalResultAccess;
     }
@@ -105,4 +105,4 @@ namespace thermofem::thermal {
                                                              std::span<const double> coefficient,
                                                              std::span<const double> ambientTemperature,
                                                              double sectionScale);
-} // namespace thermofem::thermal
+} // namespace emberfield::thermal

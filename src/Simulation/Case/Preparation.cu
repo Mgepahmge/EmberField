@@ -6,7 +6,7 @@
 #include "../Thermal/LocalResultAccess.cuh"
 #include "ConditionSupport.cuh"
 #include "ThermalSampling.cuh"
-namespace thermofem::problem {
+namespace emberfield::problem {
     PreparationResult prepareThermalCase(std::shared_ptr<const BoundCase> b,
                                          std::shared_ptr<const fem::FiniteElementSpace> s,
                                          const PreparationOptions& o) {
@@ -116,4 +116,4 @@ namespace thermofem::problem {
         }
         throw std::logic_error("自然侧项包含规定温度");
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

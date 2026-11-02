@@ -2,7 +2,7 @@
  * @brief 实现独立数值错误的稳定代码转换。
  */
 #include <FEM/Element/EvaluationError.cuh>
-namespace thermofem::fem {
+namespace emberfield::fem {
     const char* evaluationCodeName(EvaluationCode code) noexcept {
         switch (code) {
         case EvaluationCode::CoordinateRange:
@@ -30,4 +30,4 @@ namespace thermofem::fem {
         }
         return "EVALUATION_UNKNOWN";
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

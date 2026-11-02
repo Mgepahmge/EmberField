@@ -1,6 +1,6 @@
 # 基础数据结构
 
-公共头文件位于 `include/DataStructure/`，命名空间为 `thermofem`。链接 `ThermoFEM::thermofem` 即可使用。
+公共头文件位于 `include/DataStructure/`，命名空间为 `emberfield`。链接 `EmberField::emberfield` 即可使用。
 
 ## 内存策略与所有权
 
@@ -36,11 +36,11 @@ CUDA 错误抛出含原始错误码的 `CudaError`；尺寸、结构或可访问
 #include <array>
 
 const std::array<double, 3> input{1.0, 2.0, 3.0};
-thermofem::CudaBuffer<double> source(input, thermofem::PinnedMemory{});
-thermofem::CudaBuffer<double> target(3, thermofem::GlobalMemory{});
+emberfield::CudaBuffer<double> source(input, emberfield::PinnedMemory{});
+emberfield::CudaBuffer<double> target(3, emberfield::GlobalMemory{});
 target.copyDataFrom(source);  // target 仍为 global，原地址保持不变
 target = source;             // target 变为 pinned，数据深拷贝
-target.changeMemoryType(thermofem::MappedMemory{});
+target.changeMemoryType(emberfield::MappedMemory{});
 auto* devicePointer = target.deviceData();
 ```
 
@@ -73,9 +73,9 @@ auto* devicePointer = target.deviceData();
 ```cpp
 #include <DataStructure/Storage/DenseMatrix.cuh>
 
-thermofem::DenseMatrix<double> matrix(2, 3, thermofem::PinnedMemory{});
+emberfield::DenseMatrix<double> matrix(2, 3, emberfield::PinnedMemory{});
 matrix.at(1, 2) = 7.0;
-matrix.changeMemoryType(thermofem::GlobalMemory{});
+matrix.changeMemoryType(emberfield::GlobalMemory{});
 ```
 
 ## CSR 稀疏矩阵
@@ -105,7 +105,7 @@ matrix.changeMemoryType(thermofem::GlobalMemory{});
 const int offsets[]{0, 1, 2};
 const int columns[]{0, 1};
 const double values[]{2.0, 3.0};
-thermofem::CsrMatrix<double> matrix(2, 2, offsets, columns, values);
+emberfield::CsrMatrix<double> matrix(2, 2, offsets, columns, values);
 ```
 
 ## 运行示例

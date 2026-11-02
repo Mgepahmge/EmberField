@@ -4,7 +4,7 @@
 #pragma once
 #include <FEM/Assembly/Operations.cuh>
 /** @brief 与网格、材料和求解器解耦的设备线性系统运算。 */
-namespace thermofem::systems {
+namespace emberfield::systems {
     /** @brief 将规定温度精确写入温度场副本，供迭代解转为下一时刻物理状态。
      * @param state 全维候选温度。@param dofs 严格递增编号。@param values 非负有限规定值。
      * @pre 候选温度有限非负且为当前设备global。@return 独立副本，输入不变。
@@ -64,4 +64,4 @@ namespace thermofem::systems {
      * @code auto final=applyDirichlet(system,dofs,values); @endcode */
     [[nodiscard]] LinearSystem applyDirichlet(const LinearSystem& system, std::span<const std::uint64_t> dofs,
                                               std::span<const double> values);
-} // namespace thermofem::systems
+} // namespace emberfield::systems

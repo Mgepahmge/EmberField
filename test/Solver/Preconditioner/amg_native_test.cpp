@@ -9,7 +9,7 @@
 #include "NativeAggregationOracle.cuh"
 /** @brief 原生 AMG 算法与主机数学基准测试。 */
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     /** @brief CUDA 测试环境。@code NativeAmgTest fixture; @endcode */
     class NativeAmgTest : public ::testing::Test {
     protected:

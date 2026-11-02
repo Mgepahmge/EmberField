@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <stdexcept>
-namespace thermofem::problem {
+namespace emberfield::problem {
     namespace detail {
         /** @brief 仅发布完整热组装对象。@code auto p=ThermalAssemblyAccess::plan(p,a,o); @endcode */
         class ThermalAssemblyAccess {
@@ -114,4 +114,4 @@ namespace thermofem::problem {
         }
         return detail::ThermalAssemblyAccess::model(std::move(plan), std::move(spatial).release(), std::move(capacity));
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

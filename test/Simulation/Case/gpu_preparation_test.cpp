@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include "support/CaseFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace thermal;
     /** @brief GPU测试前确认设备可用；无设备时明确跳过。 */
     class GpuPreparation : public testing::Test {

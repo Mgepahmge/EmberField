@@ -6,7 +6,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     ReferenceElement::ReferenceElement(ElementKey key, unsigned dimension, std::vector<std::array<double, 3>> points,
                                        std::vector<std::size_t> offsets, std::vector<std::size_t> facets) :
         key_(key), dimension_(dimension), interpolationPoints_(std::move(points)), facetOffsets_(std::move(offsets)),
@@ -71,4 +71,4 @@ namespace thermofem::fem {
         }
         return result;
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

@@ -10,7 +10,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     std::array<double, 3> BoundCase::position(mesh::Index node) const {
         auto p = data_.mesh_->data().nodes_.at(node).position_;
         for (auto& value : p) {
@@ -318,4 +318,4 @@ namespace thermofem::problem {
         std::shared_ptr<const BoundCase> bound(new BoundCase(std::move(candidate)));
         return {std::move(bound), std::move(diagnostics)};
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

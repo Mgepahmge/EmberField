@@ -6,7 +6,7 @@
 #include <iosfwd>
 #include <map>
 
-namespace thermofem::io {
+namespace emberfield::io {
     /** @brief 配置节点的来源位置，独立于物理模型。
      * @code SourceLocation s{"case.json",1,1}; @endcode */
     struct SourceLocation {
@@ -35,4 +35,4 @@ namespace thermofem::io {
      * @return 定义或包含IO_ERROR的诊断；不加载网格、不创建输出目录。
      * @code auto r=loadCase("cases/plate.json"); @endcode */
     [[nodiscard]] CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits = {});
-} // namespace thermofem::io
+} // namespace emberfield::io

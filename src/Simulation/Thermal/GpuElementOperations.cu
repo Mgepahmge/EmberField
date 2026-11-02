@@ -7,7 +7,7 @@
 #include <cuda_runtime.h>
 #include <limits>
 
-namespace thermofem::thermal {
+namespace emberfield::thermal {
     namespace detail {
         /** @brief 保存批次来源身份与错误定位，禁止把同尺寸异源结果混加。 */
         struct GpuBatchIdentity {
@@ -131,7 +131,7 @@ namespace thermofem::thermal {
                 r.identity_ = b.identity_;
                 r.count_ = b.count_;
                 r.dofs_ = b.dofs_;
-                r.values_ = CudaBuffer<double>(thermofem::detail::checkedProduct(b.count_, b.dofs_ * b.dofs_));
+                r.values_ = CudaBuffer<double>(emberfield::detail::checkedProduct(b.count_, b.dofs_ * b.dofs_));
                 return r;
             }
             /** @brief 创建空输出设备向量批。@param b 来源。@pre 有效批。
@@ -141,7 +141,7 @@ namespace thermofem::thermal {
                 r.identity_ = b.identity_;
                 r.count_ = b.count_;
                 r.dofs_ = b.dofs_;
-                r.values_ = CudaBuffer<double>(thermofem::detail::checkedProduct(b.count_, b.dofs_));
+                r.values_ = CudaBuffer<double>(emberfield::detail::checkedProduct(b.count_, b.dofs_));
                 return r;
             }
             /** @brief 同源性检查。@param b 来源。@param a 向量。@pre 无。
@@ -395,4 +395,4 @@ namespace thermofem::thermal {
                                               const GpuLocalVectorBatch& c) {
         return detail::GpuBatchAccess::add(b, a, c);
     }
-} // namespace thermofem::thermal
+} // namespace emberfield::thermal

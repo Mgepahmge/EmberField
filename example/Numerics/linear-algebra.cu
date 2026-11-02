@@ -8,7 +8,7 @@
  * @return 成功返回零。@code ./linear-algebra @endcode
  */
 int main() {
-    using namespace thermofem;
+    using namespace emberfield;
     const std::vector<int> offsets{0, 2, 4}, columns{0, 1, 0, 1};
     const std::vector<double> values{4, -1, -1, 4}, input{1, 2};
     const CsrMatrix<double> matrix(2, 2, offsets, columns, values);

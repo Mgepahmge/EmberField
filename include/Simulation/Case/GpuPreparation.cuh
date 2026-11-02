@@ -4,7 +4,7 @@
 #pragma once
 #include <Simulation/Case/Preparation.cuh>
 #include <Simulation/Thermal/GpuElementOperations.cuh>
-namespace thermofem::problem {
+namespace emberfield::problem {
     class GpuThermalCellTerms;
     class GpuThermalBoundaryTerms;
     /** @brief 按输入活动行顺序批量计算体贡献。@param prepared 联合上下文。
@@ -74,4 +74,4 @@ namespace thermofem::problem {
         std::vector<std::size_t> naturalTermIndices_; ///< 配置自然关联行。
         Contribution contribution_; ///< 设备结果。
     };
-} // namespace thermofem::problem
+} // namespace emberfield::problem

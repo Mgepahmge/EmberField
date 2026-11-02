@@ -8,7 +8,7 @@
 
 /** @brief 独立数学运算测试，不依赖任何求解组件。 */
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     /** @brief 设备测试环境。@code MultigridOperationTest<double> fixture; @endcode */
     template <linalg::Scalar T>
     class MultigridOperationTest : public ::testing::Test {

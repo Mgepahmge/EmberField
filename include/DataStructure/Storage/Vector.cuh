@@ -5,7 +5,7 @@
 
 #include <DataStructure/Storage/CudaBuffer.cuh>
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 以连续存储表示一维向量，通过组合管理 CUDA Buffer。
      * @tparam T 满足 BufferElement 的元素类型。
      * @details 向量拥有一个 CudaBuffer，长度直接由存储决定，不重复维护维度状态。
@@ -15,8 +15,8 @@ namespace thermofem {
      * 所有同步、设备归属和异常保证遵循 CudaBuffer；新分配元素未初始化。
      * 此处仅定义存储语义，数值运算由 LinearAlgebra 层提供。
      * @code
-     * thermofem::Vector<double> vector(10, thermofem::GlobalMemory{});
-     * vector.changeMemoryType(thermofem::PinnedMemory{});
+     * emberfield::Vector<double> vector(10, emberfield::GlobalMemory{});
+     * vector.changeMemoryType(emberfield::PinnedMemory{});
      * @endcode
      */
     template <BufferElement T>
@@ -104,4 +104,4 @@ namespace thermofem {
     private:
         CudaBuffer<T> values_; ///< 独占向量的连续元素存储，不与其他向量共享所有权。
     };
-} // namespace thermofem
+} // namespace emberfield

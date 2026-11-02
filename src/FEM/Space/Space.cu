@@ -7,7 +7,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     const char* spaceIssueName(SpaceIssueCode code) noexcept {
         switch (code) {
         case SpaceIssueCode::NullMesh:
@@ -236,4 +236,4 @@ namespace thermofem::fem {
         }
         return result;
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

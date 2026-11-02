@@ -5,7 +5,7 @@
 #include <cmath>
 #include <limits>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     namespace {
         /** @brief 检查表长度乘法。@param a 行数。@param b 列数。@pre 无。
          * @return 乘积；溢出抛length_error。@code auto n=product(q,n); @endcode */
@@ -119,4 +119,4 @@ namespace thermofem::fem {
         }
         return t;
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

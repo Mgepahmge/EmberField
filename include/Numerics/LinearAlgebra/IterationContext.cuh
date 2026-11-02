@@ -5,7 +5,7 @@
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <memory>
 
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     /** @brief 持有规范化矩阵快照，复用 cuBLAS/cuSPARSE 资源；不可复制。
      * @tparam T 浮点类型。@tparam I CSR 索引。
      * @details 输入工作向量必须为相同设备上的 global 向量。方法为同步操作。
@@ -82,4 +82,4 @@ namespace thermofem::linalg {
         struct Impl; ///< CUDA 资源实现。
         std::unique_ptr<Impl> impl_; ///< 独占矩阵及执行资源。
     };
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

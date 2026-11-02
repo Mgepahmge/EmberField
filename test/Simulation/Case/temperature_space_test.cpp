@@ -7,7 +7,7 @@
 #include "support/CaseFixture.cuh"
 
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     TEST(TemperatureSpace, SteadyAndTransientHaveSameUnconstrainedNumbering) {
         auto definition = casefixture::definition();
         auto steady = casefixture::bind(definition);

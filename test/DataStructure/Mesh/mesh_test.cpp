@@ -6,7 +6,7 @@
 #include <limits>
 #include <stdexcept>
 namespace {
-    using namespace thermofem::mesh;
+    using namespace emberfield::mesh;
     /** @brief 构造无分类的多边形网格。@pre 无。@return 测试数据。
      * @code auto d=polygon(); @endcode */
     MeshData polygon() {

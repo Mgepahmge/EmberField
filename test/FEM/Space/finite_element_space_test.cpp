@@ -10,7 +10,7 @@
 #include <stdexcept>
 
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace fem;
     /** @brief 创建用于独立编号测试的两个共享单纯形。
      * @param tetra 是否四面体。@pre 无。@return 构建数据。@code auto d=data(false); @endcode */

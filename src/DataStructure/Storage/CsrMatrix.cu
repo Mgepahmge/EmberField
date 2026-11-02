@@ -3,7 +3,7 @@
  */
 #include <DataStructure/Storage/CsrMatrix.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
-namespace thermofem::detail {
+namespace emberfield::detail {
     /** @brief 提供 CSR 结构校验内核。 */
     namespace {
         /** @brief 检查行区间及其列索引。@param rows 行数。@param columns 列数。@param count 非零数。
@@ -56,4 +56,4 @@ namespace thermofem::detail {
             throw std::invalid_argument("Invalid device CSR structure");
         }
     }
-} // namespace thermofem::detail
+} // namespace emberfield::detail

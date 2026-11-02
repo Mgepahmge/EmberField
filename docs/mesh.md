@@ -23,11 +23,11 @@
 ```cpp
 #include <IO/Mesh/Msh.cuh>
 
-auto document = thermofem::io::loadMsh("input.msh");
+auto document = emberfield::io::loadMsh("input.msh");
 const auto& mesh = document.mesh_;
 auto firstCell = mesh.connectivity(0, 0);
-thermofem::io::saveMsh("output.msh", document,
-                     thermofem::io::MshEncoding::Binary);
+emberfield::io::saveMsh("output.msh", document,
+                     emberfield::io::MshEncoding::Binary);
 ```
 
 流接口 `readMsh` / `writeMsh` 可用于内存、网络或自定义流；文件接口按二进制方式打开，
@@ -55,8 +55,8 @@ mini和特殊边界类型；34、35、69、76至78等无标准固定连接布局
 读取2.2后如需原样保存应显式指定 `MshVersion::V22`。
 
 ```cpp
-thermofem::io::saveMsh("legacy-copy.msh", document,
-    thermofem::io::MshEncoding::Ascii, thermofem::io::MshVersion::V22);
+emberfield::io::saveMsh("legacy-copy.msh", document,
+    emberfield::io::MshEncoding::Ascii, emberfield::io::MshVersion::V22);
 ```
 
 ## 错误和资源限制
@@ -76,7 +76,7 @@ IO格式错误、不支持版本/布局、资源限额、打开和流错误抛�
 ```sh
 ./build/example/mesh-roundtrip input.msh output.msh binary 4.1
 ./build/example/mesh-roundtrip legacy.msh legacy-copy.msh ascii 2.2
-./build/test/thermofem_tests --gtest_filter='Mesh.*:Msh.*'
+./build/test/emberfield_tests --gtest_filter='Mesh.*:Msh.*'
 ```
 
 可选交叉验证需要Python可导入独立Gmsh，建议4.14.1；不属于库依赖，也不纳入默认CI：

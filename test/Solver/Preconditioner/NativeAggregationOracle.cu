@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include "NativeAggregationOracle.cuh"
 
-namespace thermofem::testoracle {
+namespace emberfield::testoracle {
     /** @brief 内部坐标归并与映射校验设施。 */
     namespace {
         /** @brief 排序前的单条矩阵或图边。@code Entry e{0,1,2}; @endcode */
@@ -316,4 +316,4 @@ namespace thermofem::testoracle {
         }
         return compress(count, std::move(entries), false);
     }
-} // namespace thermofem::testoracle
+} // namespace emberfield::testoracle

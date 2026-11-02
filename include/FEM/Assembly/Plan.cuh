@@ -8,7 +8,7 @@
 #include <vector>
 
 /** @brief 提供局部贡献到全局规范稀疏结构的独立组装。 */
-namespace thermofem::assembly {
+namespace emberfield::assembly {
     using Index = std::int64_t; ///< CSR行偏移和列索引。
     using DofList = std::vector<std::uint64_t>; ///< 一个局部模板的有序全局编号。
     /** @brief 控制符号展开规模的计数预算。
@@ -68,4 +68,4 @@ namespace thermofem::assembly {
         std::vector<std::size_t> components_; ///< 每DOF的共现连通分量。
         std::size_t componentCount_{}; ///< 连通分量总数。
     };
-} // namespace thermofem::assembly
+} // namespace emberfield::assembly

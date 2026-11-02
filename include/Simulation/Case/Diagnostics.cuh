@@ -9,7 +9,7 @@
 #include <vector>
 
 /** @brief 提供物理算例定义、校验与网格绑定，不承担文件编码和组装。 */
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 区分阻断当前阶段的错误与不改变输入的警告。 */
     enum class Severity { Error, Warning };
     /** @brief 单条带稳定错误码的诊断，源码位置允许缺省。
@@ -66,4 +66,4 @@ namespace thermofem::problem {
         std::size_t omitted_{}; ///< 省略计数。
         std::vector<Diagnostic> entries_; ///< 拥有诊断文本。
     };
-} // namespace thermofem::problem
+} // namespace emberfield::problem

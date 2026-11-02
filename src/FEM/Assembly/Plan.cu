@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace thermofem::assembly {
+namespace emberfield::assembly {
     std::shared_ptr<const AssemblyPlan> buildAssemblyPlan(std::size_t n, std::span<const DofList> stencils,
                                                           AssemblyLimits limits) {
         if (!n || !limits.maxDofs_ || !limits.maxStencils_ || !limits.maxLocalEntries_ || !limits.maxNonzeros_) {
@@ -107,4 +107,4 @@ namespace thermofem::assembly {
         }
         return p;
     }
-} // namespace thermofem::assembly
+} // namespace emberfield::assembly

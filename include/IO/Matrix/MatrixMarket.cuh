@@ -6,7 +6,7 @@
 #include <vector>
 
 /** @brief 提供文件格式解析，与 CUDA 存储及求解组件解耦。 */
-namespace thermofem::io {
+namespace emberfield::io {
     /** @brief 保存主机端双精度、32 位索引 CSR 数据。
      * @details 输入坐标可乱序或重复，读取后按行整理，重复项保留供后续规范化。
      * @code auto host = readMatrixMarket(stream); @endcode
@@ -29,4 +29,4 @@ namespace thermofem::io {
      * @code std::ifstream file(path); auto host = readMatrixMarket(file); @endcode
      */
     HostCsr readMatrixMarket(std::istream& input);
-} // namespace thermofem::io
+} // namespace emberfield::io

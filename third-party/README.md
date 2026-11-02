@@ -1,6 +1,6 @@
 # 第三方组件
 
-本目录随源代码分发，不参与项目代码格式化。ThermoFEM的MIT许可证不替代各组件原始许可证。
+本目录随源代码分发，不参与项目代码格式化。EmberField的MIT许可证不替代各组件原始许可证。
 
 | 组件 | 用途 | 来源与版本边界 | 许可证 |
 | --- | --- | --- | --- |
@@ -15,4 +15,4 @@
 - picojson.h SHA256：`5ddf7276d04926da7be243e7af49258e78cc27278ee9097ba45b942c7a6b5f9d`。
 - LICENSE SHA256：`5585fe141cc7bb08c953f3859db608852968d0bbc625b9b6d95c0bd6349bacb6`。
 
-安装产物包含原始头文件与本说明（share/ThermoFEM/third-party），以及许可证（share/licenses/ThermoFEM/picojson）。公开ThermoFEM头文件不暴露picojson，不需要下游安装JSON包或在公开include路径中加入本组件。
+安装产物包含原始头文件与本说明（share/EmberField/third-party），以及许可证（share/licenses/EmberField/picojson）。公开EmberField头文件不暴露picojson，不需要下游安装JSON包或在公开include路径中加入本组件。

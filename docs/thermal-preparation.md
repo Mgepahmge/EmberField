@@ -5,12 +5,12 @@
 ## 完整配置入口
 
 ~~~cpp
-auto input = thermofem::io::loadCase(configPath);
-auto document = thermofem::io::loadMsh(input.definition_->mesh_.path_);
-auto binding = thermofem::problem::bindCase(
-    *input.definition_, std::make_shared<const thermofem::mesh::Mesh>(std::move(document.mesh_)));
-auto space = thermofem::problem::buildTemperatureSpace(*binding.bound_);
-auto result = thermofem::problem::prepareThermalCase(binding.bound_, space.space_);
+auto input = emberfield::io::loadCase(configPath);
+auto document = emberfield::io::loadMsh(input.definition_->mesh_.path_);
+auto binding = emberfield::problem::bindCase(
+    *input.definition_, std::make_shared<const emberfield::mesh::Mesh>(std::move(document.mesh_)));
+auto space = emberfield::problem::buildTemperatureSpace(*binding.bound_);
+auto result = emberfield::problem::prepareThermalCase(binding.bound_, space.space_);
 ~~~
 
 每一步必须先检查成功对象及诊断，不能直接解引用失败结果。完整受检用法见example/Simulation/prepare-inspect.cu。PreparationResult::ok仅代表本阶段成功；旧BoundCase能力报告不变，尚未生成A、b，也不认证稳态纯Neumann、全局正定性或CG适用性。

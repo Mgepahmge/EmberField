@@ -19,7 +19,7 @@
  * @brief 提供 YHAMG-GPU 原生聚合算法的独立 GPU 运算及聚合传输接口。
  */
 
-namespace thermofem {
+namespace emberfield {
     namespace {
         namespace multigrid {
             /** @brief 组合拥有分片常数延拓的映射与排序成员表。
@@ -117,13 +117,13 @@ namespace thermofem {
             CsrMatrix<double> toNativeMatrix(const CsrMatrix<T, I>& a);
         } // namespace multigrid
     } // namespace
-} // namespace thermofem
+} // namespace emberfield
 
 /**
  * @brief 定义不依赖矩阵、平滑器和 GPU 执行方式的 V/W/F 循环调度。
  */
 
-namespace thermofem {
+namespace emberfield {
     namespace {
         namespace multigrid {
             /** @brief V 单次递归、W 两次递归、F 嵌套迭代后 V 修正。 */
@@ -183,14 +183,14 @@ namespace thermofem {
             }
         } // namespace multigrid
     } // namespace
-} // namespace thermofem
+} // namespace emberfield
 
 /**
  * @brief 实现 GPU 两阶段匹配、图收缩、单点吸收、直接 Galerkin 归并、传输与粗层 LU。
  * @details 数值算法参考用户的非公开 YHAMG-GPU，保留匹配哈希与 GPU 阶段顺序。
  */
 
-namespace thermofem {
+namespace emberfield {
     namespace {
         namespace multigrid {
             /** @brief 封装仅依赖 GPU 数组的 setup 与传输内核。 */
@@ -1344,26 +1344,26 @@ namespace thermofem {
             CsrMatrix<T, I> fromNativeMatrix(const CsrMatrix<double>& a) {
                 return convertMatrix<T, I>(a);
             }
-#define THERMOFEM_TRANSFER(T)                                                                                          \
+#define EMBERFIELD_TRANSFER(T)                                                                                         \
     template void restrictAggregates<T>(const AggregateTransfer&, const Vector<T>&, Vector<T>&);                       \
     template void prolongAggregates<T>(const AggregateTransfer&, const Vector<T>&, Vector<T>&);                        \
     template void solveCoarse<T>(const CoarseFactor&, const Vector<T>&, Vector<T>&);
-            THERMOFEM_TRANSFER(float)
-            THERMOFEM_TRANSFER(double)
-#undef THERMOFEM_TRANSFER
-#define THERMOFEM_CONVERSION(T, I)                                                                                     \
+            EMBERFIELD_TRANSFER(float)
+            EMBERFIELD_TRANSFER(double)
+#undef EMBERFIELD_TRANSFER
+#define EMBERFIELD_CONVERSION(T, I)                                                                                    \
     template CsrMatrix<double> toNativeMatrix<T, I>(const CsrMatrix<T, I>&);                                           \
     template CsrMatrix<T, I> fromNativeMatrix<T, I>(const CsrMatrix<double>&);
-            THERMOFEM_CONVERSION(float, int)
-            THERMOFEM_CONVERSION(double, int)
-            THERMOFEM_CONVERSION(float, std::int64_t)
-            THERMOFEM_CONVERSION(double, std::int64_t)
-#undef THERMOFEM_CONVERSION
+            EMBERFIELD_CONVERSION(float, int)
+            EMBERFIELD_CONVERSION(double, int)
+            EMBERFIELD_CONVERSION(float, std::int64_t)
+            EMBERFIELD_CONVERSION(double, std::int64_t)
+#undef EMBERFIELD_CONVERSION
         } // namespace multigrid
     } // namespace
-} // namespace thermofem
+} // namespace emberfield
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 组合一层运算、独立前后平滑器及传输缓存。@code Level level(a); @endcode */
     template <linalg::Scalar T, CsrIndex I>
     struct Amg<T, I>::Level {
@@ -1586,4 +1586,4 @@ namespace thermofem {
     template class Amg<double, int>;
     template class Amg<float, std::int64_t>;
     template class Amg<double, std::int64_t>;
-} // namespace thermofem
+} // namespace emberfield

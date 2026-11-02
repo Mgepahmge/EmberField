@@ -1,12 +1,12 @@
 /**
  * @file version.cu
- * @brief 实现 ThermoFEM 库版本查询接口。
+ * @brief 实现 EmberField 库版本查询接口。
  */
 
 #include <version.cuh>
 
-namespace thermofem {
+namespace emberfield {
 
     Version version() noexcept { return {0, 1, 0}; }
 
-} // namespace thermofem
+} // namespace emberfield

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include "../LinearAlgebra/DeviceChecks.cuh"
-namespace thermofem::systems {
+namespace emberfield::systems {
     namespace detail {
         /** @brief 接管已通过检查的系统候选。
          * @code auto s=SystemAccess::make(std::move(a),std::move(b)); @endcode */
@@ -293,4 +293,4 @@ namespace thermofem::systems {
         flag.verify();
         return detail::SystemAccess::make(std::move(a), std::move(rhs));
     }
-} // namespace thermofem::systems
+} // namespace emberfield::systems

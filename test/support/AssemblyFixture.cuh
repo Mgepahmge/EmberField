@@ -7,15 +7,15 @@
 namespace assemblyfixture {
     /** @brief 下载缓冲区。@tparam T 元素。@param b 缓冲区。@pre 已同步。
      * @return 主机数组。@code auto x=host(buffer); @endcode */
-    template <thermofem::BufferElement T>
-    std::vector<T> host(const thermofem::CudaBuffer<T>& b) {
+    template <emberfield::BufferElement T>
+    std::vector<T> host(const emberfield::CudaBuffer<T>& b) {
         std::vector<T> v(b.size());
         b.copyToHost(v);
         return v;
     }
     /** @brief 转成稠密行主序。@param a CSR。@pre 无。
      * @return 主机稠密值。@code auto d=dense(a); @endcode */
-    inline std::vector<double> dense(const thermofem::assembly::Matrix& a) {
+    inline std::vector<double> dense(const emberfield::assembly::Matrix& a) {
         auto r = host(a.rowOffsets()), c = host(a.columnIndices());
         auto v = host(a.values());
         std::vector<double> out(a.rowCount() * a.columnCount(), 0);
@@ -28,8 +28,8 @@ namespace assemblyfixture {
     }
     /** @brief 构造全存储规范矩阵。@param n 维度。@param v 行主序值。
      * @pre n平方等于值数。@return 设备CSR。@code auto a=matrix(2,{2,-1,-1,2}); @endcode */
-    inline thermofem::assembly::Matrix matrix(std::size_t n, std::vector<double> v) {
-        std::vector<thermofem::assembly::Index> r(n + 1), c(n * n);
+    inline emberfield::assembly::Matrix matrix(std::size_t n, std::vector<double> v) {
+        std::vector<emberfield::assembly::Index> r(n + 1), c(n * n);
         for (std::size_t i = 0; i <= n; ++i) {
             r[i] = i * n;
         }

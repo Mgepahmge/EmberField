@@ -6,7 +6,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
-namespace thermofem::mesh {
+namespace emberfield::mesh {
     namespace {
         /** @brief 查询可靠的一阶局部侧目录。@param t 参考布局。
          * @pre 无。@return 局部节点位置表，未知时空。
@@ -71,4 +71,4 @@ namespace thermofem::mesh {
         }
         return result;
     }
-} // namespace thermofem::mesh
+} // namespace emberfield::mesh

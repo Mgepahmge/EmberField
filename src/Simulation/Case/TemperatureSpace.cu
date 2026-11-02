@@ -4,7 +4,7 @@
 #include <Simulation/Case/TemperatureSpace.cuh>
 #include <stdexcept>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     TemperatureSpaceResult buildTemperatureSpace(const BoundCase& bound, fem::SpaceLimits limits) {
         if (!limits.maxCells_ || !limits.maxLocalDofs_ || !limits.maxGlobalDofs_ || !limits.maxDiagnostics_) {
             throw std::invalid_argument("温度空间限额必须为正");
@@ -78,4 +78,4 @@ namespace thermofem::problem {
         }
         return result;
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

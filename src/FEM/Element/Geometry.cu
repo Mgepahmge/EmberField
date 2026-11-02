@@ -6,7 +6,7 @@
 #include <cmath>
 #include <numeric>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     namespace {
         using Point = std::array<double, 3>;
         /** @brief 统一抛出几何失败。@param code 代码。@param message 描述。@param cell 单元。
@@ -320,4 +320,4 @@ namespace thermofem::fem {
         }
         return p;
     }
-} // namespace thermofem::fem
+} // namespace emberfield::fem

@@ -6,7 +6,7 @@
 #include <FEM/Element/ReferenceElement.cuh>
 #include <memory>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     using DofIndex = std::uint64_t; ///< 空间内编号；不等于节点索引或GPU矩阵int索引。
     /** @brief 自由度来源；当前只构造顶点取值。 */
     enum class DofKind { Vertex };
@@ -132,4 +132,4 @@ namespace thermofem::fem {
      * @return 独立拥有的侧DOF数组；非法引用抛out_of_range，分配异常传播。
      * @code auto ids=facetDofs(space,{{0,0},2}); @endcode */
     [[nodiscard]] std::vector<DofIndex> facetDofs(const FiniteElementSpace& space, mesh::FacetUse use);
-} // namespace thermofem::fem
+} // namespace emberfield::fem

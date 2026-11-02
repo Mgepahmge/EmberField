@@ -5,7 +5,7 @@
 #include <DataStructure/Mesh/Mesh.cuh>
 #include <compare>
 
-namespace thermofem::mesh {
+namespace emberfield::mesh {
     /** @brief 当前网格中的单元位置，与持久tag和未来DOF编号分离。
      * @code CellRef cell{0,2}; @endcode */
     struct CellRef {
@@ -41,4 +41,4 @@ namespace thermofem::mesh {
      * @code auto t=buildFacetTopology(mesh,active); @endcode */
     [[nodiscard]] FacetTopology buildFacetTopology(const Mesh& mesh, std::span<const CellRef> active,
                                                    std::size_t maxFacets = 10000000);
-} // namespace thermofem::mesh
+} // namespace emberfield::mesh

@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace thermofem::io {
+namespace emberfield::io {
     /** @brief 包含 Matrix Market 文本解析的内部辅助操作。 */
     namespace {
         /** @brief 读取下一条非空非注释行。@param input 输入。@param line 输出。
@@ -120,4 +120,4 @@ namespace thermofem::io {
         }
         return result;
     }
-} // namespace thermofem::io
+} // namespace emberfield::io

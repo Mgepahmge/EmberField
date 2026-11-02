@@ -5,7 +5,7 @@
 #include <numeric>
 #include "support/AssemblyFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace assembly;
     using namespace assemblyfixture;
     TEST(AssemblyPlan, CanonicalGraphSlotsAndVertexComponents) {

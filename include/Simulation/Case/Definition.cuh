@@ -11,7 +11,7 @@
 #include <vector>
 
 /** @brief 提供类型化物理模型；数值统一使用SI与绝对温度K。 */
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 常量标量场；未来变体通过ScalarField扩展，不执行脚本。
      * @code ScalarField field=ConstantScalar{300}; @endcode */
     struct ConstantScalar {
@@ -171,4 +171,4 @@ namespace thermofem::problem {
         LinearOptions linearSolver_; ///< 恒等预条件、失败终止。
         OutputOptions output_; ///< VTU温度输出意图。
     };
-} // namespace thermofem::problem
+} // namespace emberfield::problem

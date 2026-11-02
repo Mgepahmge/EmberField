@@ -11,7 +11,7 @@
 #include <utility>
 
 /** @brief 封装由 cuBLAS 与 cuSPARSE 执行的基础线性代数运算。 */
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     namespace detail {
         /** @brief 检查操作数设备是否一致。@param devices 设备编号，忽略 -1。
          * @pre 无额外约束，不一致时抛异常。@return 公共设备或 -1。
@@ -77,7 +77,7 @@ namespace thermofem::linalg {
             if (count == 0) {
                 return;
             }
-            auto status = cudaMemset(pointer, 0, thermofem::detail::checkedProduct(count, sizeof(T)));
+            auto status = cudaMemset(pointer, 0, emberfield::detail::checkedProduct(count, sizeof(T)));
             if (status != cudaSuccess) {
                 throw CudaError(status, "cudaMemset");
             }
@@ -158,7 +158,7 @@ namespace thermofem::linalg {
 
     /** @brief 计算向量缩放。@tparam T float 或 double。@param vector 输入。@param factor 系数。
      * @pre 外部异步访问已结束，元素数不超过 INT_MAX。@return 沿用输入策略的新向量。
-     * @code auto result = thermofem::linalg::scale(vector, 2.0); @endcode
+     * @code auto result = emberfield::linalg::scale(vector, 2.0); @endcode
      */
     template <Scalar T>
     Vector<T> scale(const Vector<T>& vector, std::type_identity_t<T> factor) {
@@ -174,7 +174,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算 x + beta*y。@tparam T 浮点精度。@param x 左向量。@param y 右向量。@param beta 右系数。
      * @pre 长度和设备一致，外部访问已同步，尺寸不超过 INT_MAX。@return 沿用 x 策略的新向量。
-     * @code auto result = thermofem::linalg::add(x, y); @endcode
+     * @code auto result = emberfield::linalg::add(x, y); @endcode
      */
     template <Scalar T>
     Vector<T> add(const Vector<T>& x, const Vector<T>& y, std::type_identity_t<T> beta = T{1}) {
@@ -193,7 +193,7 @@ namespace thermofem::linalg {
         return result;
     }
     /** @brief 计算向量差。@tparam T 精度。@param x 左向量。@param y 右向量。
-     * @pre 同 add()。@return 沿用 x 策略的新向量。@code auto result = thermofem::linalg::subtract(x, y); @endcode
+     * @pre 同 add()。@return 沿用 x 策略的新向量。@code auto result = emberfield::linalg::subtract(x, y); @endcode
      */
     template <Scalar T>
     Vector<T> subtract(const Vector<T>& x, const Vector<T>& y) {
@@ -201,7 +201,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算 alpha*x+y。@tparam T 精度。@param alpha 系数。@param x 输入。@param y 输入。
      * @pre 同 add()。@return 沿用 y 策略的新向量，输入不改变。
-     * @code auto result = thermofem::linalg::axpy(2.0, x, y); @endcode
+     * @code auto result = emberfield::linalg::axpy(2.0, x, y); @endcode
      */
     template <Scalar T>
     Vector<T> axpy(std::type_identity_t<T> alpha, const Vector<T>& x, const Vector<T>& y) {
@@ -209,7 +209,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算实数内积。@tparam T 精度。@param x 左向量。@param y 右向量。
      * @pre 长度和设备一致，外部访问已同步，尺寸不超过 INT_MAX。@return 内积，空向量为 0。
-     * @code auto value = thermofem::linalg::dot(x, y); @endcode
+     * @code auto value = emberfield::linalg::dot(x, y); @endcode
      */
     template <Scalar T>
     T dot(const Vector<T>& x, const Vector<T>& y) {
@@ -225,7 +225,7 @@ namespace thermofem::linalg {
         return detail::blasDot(count, left.deviceData(), right.deviceData());
     }
     /** @brief 以向量乘法表示实数内积。@tparam T 精度。@param x 左向量。@param y 右向量。
-     * @pre 同 dot()。@return 内积标量。@code auto value = thermofem::linalg::multiply(x, y); @endcode
+     * @pre 同 dot()。@return 内积标量。@code auto value = emberfield::linalg::multiply(x, y); @endcode
      */
     template <Scalar T>
     T multiply(const Vector<T>& x, const Vector<T>& y) {
@@ -233,7 +233,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算向量二范数。@tparam T 精度。@param vector 输入。
      * @pre 外部访问已同步，尺寸不超过 INT_MAX。@return 二范数，空向量为 0。
-     * @code auto value = thermofem::linalg::norm2(vector); @endcode
+     * @code auto value = emberfield::linalg::norm2(vector); @endcode
      */
     template <Scalar T>
     T norm2(const Vector<T>& vector) {
@@ -246,7 +246,7 @@ namespace thermofem::linalg {
         return detail::blasNorm(count, input.deviceData(), false);
     }
     /** @brief 计算向量一范数（绝对值之和）。@tparam T 精度。@param vector 输入。
-     * @pre 同 norm2()。@return 一范数，空向量为 0。@code auto value = thermofem::linalg::norm1(vector); @endcode
+     * @pre 同 norm2()。@return 一范数，空向量为 0。@code auto value = emberfield::linalg::norm1(vector); @endcode
      */
     template <Scalar T>
     T norm1(const Vector<T>& vector) {
@@ -261,7 +261,7 @@ namespace thermofem::linalg {
 
     /** @brief 缩放稠密矩阵。@tparam T 精度。@param matrix 输入。@param factor 系数。
      * @pre 元素数不超过 INT_MAX，外部访问已同步。@return 沿用输入策略的新矩阵。
-     * @code auto result = thermofem::linalg::scale(matrix, 2.0); @endcode
+     * @code auto result = emberfield::linalg::scale(matrix, 2.0); @endcode
      */
     template <Scalar T>
     DenseMatrix<T> scale(const DenseMatrix<T>& matrix, std::type_identity_t<T> factor) {
@@ -277,7 +277,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算稠密矩阵 a+beta*b。@tparam T 精度。@param a 左矩阵。@param b 右矩阵。@param beta 右系数。
      * @pre 形状和设备一致，元素数不超过 INT_MAX，外部访问已同步。@return 沿用 a 策略的新矩阵。
-     * @code auto result = thermofem::linalg::add(a, b); @endcode
+     * @code auto result = emberfield::linalg::add(a, b); @endcode
      */
     template <Scalar T>
     DenseMatrix<T> add(const DenseMatrix<T>& a, const DenseMatrix<T>& b, std::type_identity_t<T> beta = T{1}) {
@@ -296,7 +296,7 @@ namespace thermofem::linalg {
         return result;
     }
     /** @brief 计算稠密矩阵差。@tparam T 精度。@param a 左矩阵。@param b 右矩阵。
-     * @pre 同 add()。@return 沿用 a 策略的新矩阵。@code auto result = thermofem::linalg::subtract(a, b); @endcode
+     * @pre 同 add()。@return 沿用 a 策略的新矩阵。@code auto result = emberfield::linalg::subtract(a, b); @endcode
      */
     template <Scalar T>
     DenseMatrix<T> subtract(const DenseMatrix<T>& a, const DenseMatrix<T>& b) {
@@ -304,7 +304,7 @@ namespace thermofem::linalg {
     }
     /** @brief 转置稠密矩阵。@tparam T 精度。@param matrix 输入。
      * @pre 行列数不超过 INT_MAX，外部访问已同步。@return 沿用输入策略的行主序转置矩阵。
-     * @code auto result = thermofem::linalg::transpose(matrix); @endcode
+     * @code auto result = emberfield::linalg::transpose(matrix); @endcode
      */
     template <Scalar T>
     DenseMatrix<T> transpose(const DenseMatrix<T>& matrix) {
@@ -320,7 +320,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算稠密矩阵向量积。@tparam T 精度。@param matrix 左矩阵。@param vector 右向量。
      * @pre 内维度和设备一致，维度不超过 INT_MAX，外部访问已同步。@return 沿用矩阵策略的新向量。
-     * @code auto result = thermofem::linalg::multiply(matrix, vector); @endcode
+     * @code auto result = emberfield::linalg::multiply(matrix, vector); @endcode
      */
     template <Scalar T>
     Vector<T> multiply(const DenseMatrix<T>& matrix, const Vector<T>& vector) {
@@ -342,7 +342,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算稠密矩阵乘积。@tparam T 精度。@param a 左矩阵。@param b 右矩阵。
      * @pre 内维度和设备一致，维度不超过 INT_MAX，外部访问已同步。@return 沿用 a 策略的新矩阵。
-     * @code auto result = thermofem::linalg::multiply(a, b); @endcode
+     * @code auto result = emberfield::linalg::multiply(a, b); @endcode
      */
     template <Scalar T>
     DenseMatrix<T> multiply(const DenseMatrix<T>& a, const DenseMatrix<T>& b) {
@@ -365,7 +365,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算稠密矩阵 Frobenius 范数。@tparam T 精度。@param matrix 输入。
      * @pre 元素数不超过 INT_MAX，外部访问已同步。@return 范数。
-     * @code auto value = thermofem::linalg::frobeniusNorm(matrix); @endcode
+     * @code auto value = emberfield::linalg::frobeniusNorm(matrix); @endcode
      */
     template <Scalar T>
     T frobeniusNorm(const DenseMatrix<T>& matrix) {
@@ -381,7 +381,7 @@ namespace thermofem::linalg {
     /** @brief 缩放 CSR 数值，保持原稀疏结构（含重复项）不变。@tparam T 精度。@tparam I 索引。
      * @param matrix 输入。@param factor 系数。@pre 非零数不超过 INT_MAX，外部访问已同步。
      * @return 沿用输入策略的新 CSR；数值缩放由 cuBLAS 完成。
-     * @code auto result = thermofem::linalg::scale(matrix, 2.0); @endcode
+     * @code auto result = emberfield::linalg::scale(matrix, 2.0); @endcode
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> scale(const CsrMatrix<T, I>& matrix, std::type_identity_t<T> factor) {
@@ -398,7 +398,7 @@ namespace thermofem::linalg {
     /** @brief 计算 CSR 与向量乘积（SpMV）。@tparam T 精度。@tparam I 索引。
      * @param matrix 左矩阵。@param vector 右向量。@pre 内维度和设备一致，外部访问已同步。
      * @return 沿用矩阵策略的新向量，支持 32/64 位结构索引。
-     * @code auto result = thermofem::linalg::multiply(matrix, vector); @endcode
+     * @code auto result = emberfield::linalg::multiply(matrix, vector); @endcode
      */
     template <Scalar T, CsrIndex I>
     Vector<T> multiply(const CsrMatrix<T, I>& matrix, const Vector<T>& vector) {
@@ -420,7 +420,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算 CSR 与稠密矩阵乘积（SpMM）。@tparam T 精度。@tparam I 索引。
      * @param matrix 左 CSR。@param dense 右矩阵。@pre 内维度和设备一致，外部访问已同步。
-     * @return 沿用左策略的行主序矩阵。@code auto result = thermofem::linalg::multiply(sparse, dense); @endcode
+     * @return 沿用左策略的行主序矩阵。@code auto result = emberfield::linalg::multiply(sparse, dense); @endcode
      */
     template <Scalar T, CsrIndex I>
     DenseMatrix<T> multiply(const CsrMatrix<T, I>& matrix, const DenseMatrix<T>& dense) {
@@ -444,7 +444,7 @@ namespace thermofem::linalg {
      * @param a 左矩阵。@param b 右矩阵。@param beta 右系数。
      * @pre 形状和设备一致，行列及非零数适配 int，外部访问已同步。
      * @return 沿用 a 策略和索引类型的规范化 CSR。
-     * @code auto result = thermofem::linalg::add(a, b); @endcode
+     * @code auto result = emberfield::linalg::add(a, b); @endcode
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> add(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b, std::type_identity_t<T> beta = T{1}) {
@@ -464,7 +464,7 @@ namespace thermofem::linalg {
         return detail::restoreSparse<T, I>(a.rowCount(), a.columnCount(), output, a.values().memoryStrategy());
     }
     /** @brief 计算 CSR 矩阵差。@tparam T 精度。@tparam I 索引。@param a 左矩阵。@param b 右矩阵。
-     * @pre 同 add()。@return 规范化 CSR。@code auto result = thermofem::linalg::subtract(a, b); @endcode
+     * @pre 同 add()。@return 规范化 CSR。@code auto result = emberfield::linalg::subtract(a, b); @endcode
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> subtract(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b) {
@@ -472,7 +472,7 @@ namespace thermofem::linalg {
     }
     /** @brief 用 cuSPARSE 转置 CSR。@tparam T 精度。@tparam I 索引。@param matrix 输入。
      * @pre 行列和非零数适配 int，外部访问已同步。@return 沿用输入策略和索引类型的规范化转置 CSR。
-     * @code auto result = thermofem::linalg::transpose(matrix); @endcode
+     * @code auto result = emberfield::linalg::transpose(matrix); @endcode
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> transpose(const CsrMatrix<T, I>& matrix) {
@@ -489,7 +489,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算 CSR 矩阵乘积（SpGEMM）。@tparam T 精度。@tparam I 索引。@param a 左矩阵。@param b 右矩阵。
      * @pre 内维度和设备一致，行列、输入及输出非零数适配 int，外部访问已同步。
-     * @return 沿用 a 策略和索引类型的规范化 CSR。@code auto result = thermofem::linalg::multiply(a, b); @endcode
+     * @return 沿用 a 策略和索引类型的规范化 CSR。@code auto result = emberfield::linalg::multiply(a, b); @endcode
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> multiply(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b) {
@@ -511,7 +511,7 @@ namespace thermofem::linalg {
     }
     /** @brief 计算 CSR 的 Frobenius 范数，先合并重复项。@tparam T 精度。@tparam I 索引。@param matrix 输入。
      * @pre 规范化后非零数不超过 INT_MAX，外部访问已同步。@return 矩阵范数。
-     * @code auto value = thermofem::linalg::frobeniusNorm(matrix); @endcode
+     * @code auto value = emberfield::linalg::frobeniusNorm(matrix); @endcode
      */
     template <Scalar T, CsrIndex I>
     T frobeniusNorm(const CsrMatrix<T, I>& matrix) {
@@ -522,4 +522,4 @@ namespace thermofem::linalg {
         auto input = detail::canonical<I>(matrix);
         return detail::blasNorm(detail::librarySize(input.nonZeroCount()), input.deviceValues(), false);
     }
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

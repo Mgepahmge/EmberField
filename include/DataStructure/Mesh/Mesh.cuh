@@ -13,7 +13,7 @@
 #include <vector>
 
 /** @brief 提供独立于文件格式、离散算子及CUDA存储的网格模型。 */
-namespace thermofem::mesh {
+namespace emberfield::mesh {
     using Tag = std::uint64_t; ///< 持久标签；不是连续数组索引。
     using Index = std::size_t; ///< 当前网格内的连续宿主索引。
 
@@ -203,4 +203,4 @@ namespace thermofem::mesh {
         MeshData data_; ///< 唯一拥有的网格值。
         std::unordered_map<Tag, Index> nodeIndices_; ///< 标签到连续节点索引的查询缓存。
     };
-} // namespace thermofem::mesh
+} // namespace emberfield::mesh

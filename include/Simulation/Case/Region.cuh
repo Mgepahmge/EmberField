@@ -7,7 +7,7 @@
 #include <map>
 #include <set>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     using GroupKey = std::pair<int, std::int64_t>; ///< 维数与物理标签，不是几何实体身份。
     /** @brief 保存当前网格有效物理归属；支持无名组与块级空覆盖。
      * @code auto index=buildPhysicalMembership(mesh); @endcode */
@@ -35,4 +35,4 @@ namespace thermofem::problem {
      * @code auto r=resolveRegion(selector,index); @endcode */
     [[nodiscard]] RegionResult resolveRegion(const RegionSelector& selector, const PhysicalMembership& index,
                                              CaseLimits limits = {});
-} // namespace thermofem::problem
+} // namespace emberfield::problem

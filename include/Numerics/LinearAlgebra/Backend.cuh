@@ -5,7 +5,7 @@
 #include <DataStructure/Storage/CsrMatrix.cuh>
 #include <vector>
 
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     /// 线性代数后端支持的实数精度。
     template <class T>
     concept Scalar = std::same_as<T, float> || std::same_as<T, double>;
@@ -109,4 +109,4 @@ namespace thermofem::linalg {
         template <Scalar T>
         SparseHostData<T> sparseGemm(const CsrMatrix<T, int>& a, const CsrMatrix<T, int>& b);
     } // namespace detail
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

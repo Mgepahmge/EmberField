@@ -15,7 +15,7 @@
 
 /** @brief 包含数据结构单元测试及测试辅助设施。 */
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
 
     static_assert(!std::is_base_of_v<CudaBuffer<double>, Vector<double>>);
     static_assert(!std::is_convertible_v<Vector<double>&, CudaBuffer<double>&>);
@@ -79,7 +79,7 @@ namespace {
     }
 
     /** @brief 验证空缓冲区的类型传播和空指针行为，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=BufferTest.emptyOwnership @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=BufferTest.emptyOwnership @endcode
      */
     TEST(BufferTest, emptyOwnership) {
         CudaBuffer<int> source(PinnedMemory{});
@@ -104,7 +104,7 @@ namespace {
     }
 
     /** @brief 验证分配前的字节数溢出检查，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=BufferTest.rejectsSizeOverflow @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=BufferTest.rejectsSizeOverflow @endcode
      */
     TEST(BufferTest, rejectsSizeOverflow) {
         const auto count = std::numeric_limits<std::size_t>::max() / sizeof(double) + 1;
@@ -113,7 +113,7 @@ namespace {
     }
 
     /** @brief 验证空缓冲区拒绝错误的主机数组长度，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=BufferTest.rejectsHostSizeMismatch @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=BufferTest.rejectsHostSizeMismatch @endcode
      */
     TEST(BufferTest, rejectsHostSizeMismatch) {
         CudaBuffer<int> buffer;
@@ -123,7 +123,7 @@ namespace {
     }
 
     /** @brief 验证空矩阵移动后的维度以及形状校验，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=DenseMatrixTest.emptyShapeAndMove @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=DenseMatrixTest.emptyShapeAndMove @endcode
      */
     TEST(DenseMatrixTest, emptyShapeAndMove) {
         DenseMatrix<double> source(3, 0, PinnedMemory{});
@@ -142,7 +142,7 @@ namespace {
     }
 
     /** @brief 验证 CSR 数组长度与端点错误在分配前被拒绝，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=CsrMatrixTest.rejectsInvalidSizesAndEndpoints @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=CsrMatrixTest.rejectsInvalidSizesAndEndpoints @endcode
      */
     TEST(CsrMatrixTest, rejectsInvalidSizesAndEndpoints) {
         const std::array<int, 3> offsets{0, 1, 2};
@@ -158,7 +158,7 @@ namespace {
     }
 
     /** @brief 验证 CSR 偏移和列索引的合法性检查，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=CsrMatrixTest.rejectsInvalidIndices @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=CsrMatrixTest.rejectsInvalidIndices @endcode
      */
     TEST(CsrMatrixTest, rejectsInvalidIndices) {
         const std::array<int, 4> decreasing{0, 2, 1, 2};
@@ -177,7 +177,7 @@ namespace {
     }
 
     /** @brief 验证 CSR 索引类型范围检查和默认空对象，无参数、无额外约束、无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=CsrMatrixTest.indexOverflowAndEmptyMove @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=CsrMatrixTest.indexOverflowAndEmptyMove @endcode
      */
     TEST(CsrMatrixTest, indexOverflowAndEmptyMove) {
         EXPECT_THROW((CsrMatrix<double>(std::numeric_limits<std::size_t>::max(), 2, {}, {}, {})), std::length_error);
@@ -195,7 +195,7 @@ namespace {
     }
 
     /** @brief 为全部源、目标内存类型组合提供真实 CUDA 测试环境。
-     * @code ./build/test/thermofem_tests --gtest_filter=allMemoryPairs* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=allMemoryPairs* @endcode
      */
     class CudaTransferTest : public ::testing::TestWithParam<std::tuple<MemoryType, MemoryType>> {
     protected:
@@ -214,7 +214,7 @@ namespace {
     };
 
     /** @brief 验证跨类型只复制数据与深拷贝赋值，无参数。@pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=*copyDataAndAssignment* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=*copyDataAndAssignment* @endcode
      */
     TEST_P(CudaTransferTest, copyDataAndAssignment) {
         const auto [sourceType, targetType] = GetParam();
@@ -245,7 +245,7 @@ namespace {
 
     /** @brief 验证转换保留数据、移动接管所有权及主机设备视图，无参数。
      * @pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=*conversionAndMove* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=*conversionAndMove* @endcode
      */
     TEST_P(CudaTransferTest, conversionAndMove) {
         const auto [sourceType, targetType] = GetParam();
@@ -291,7 +291,7 @@ namespace {
 
     /** @brief 验证组合向量在全部内存策略配对下的所有权与复制语义，无参数。
      * @pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=VectorTest.* @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=VectorTest.* @endcode
      */
     TEST(VectorTest, composedStoragePreservesOwnershipAndPolicy) {
         std::string reason;
@@ -346,7 +346,7 @@ namespace {
     }
 
     /** @brief 验证稠密矩阵布局与所有权，无参数。@pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=DenseMatrixTest.storageAndValueSemantics @endcode */
+     * @code ./build/test/emberfield_tests --gtest_filter=DenseMatrixTest.storageAndValueSemantics @endcode */
     TEST(DenseMatrixTest, storageAndValueSemantics) {
         std::string reason;
         if (!cudaAvailable(reason)) {
@@ -376,7 +376,7 @@ namespace {
     }
 
     /** @brief 验证 CSR 三缓冲区的一致性及深拷贝，无参数。@pre CUDA 可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=CsrMatrixTest.storageAndValueSemantics @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=CsrMatrixTest.storageAndValueSemantics @endcode
      */
     TEST(CsrMatrixTest, storageAndValueSemantics) {
         std::string reason;
@@ -417,7 +417,7 @@ namespace {
 
     /** @brief 验证设备归属、上下文恢复以及跨设备复制的拒绝行为，无参数。
      * @pre 至少两个 CUDA 设备可用。@note 无返回值。
-     * @code ./build/test/thermofem_tests --gtest_filter=BufferTest.deviceOwnership @endcode
+     * @code ./build/test/emberfield_tests --gtest_filter=BufferTest.deviceOwnership @endcode
      */
     TEST(BufferTest, deviceOwnership) {
         std::string reason;

@@ -13,8 +13,8 @@
 namespace {
     /** @brief 将终止状态转换为文本。@param status 状态。@pre 有效枚举。
      * @return 稳定的状态名称。@code statusName(report.status_); @endcode */
-    const char* statusName(thermofem::SolveStatus status) {
-        using thermofem::SolveStatus;
+    const char* statusName(emberfield::SolveStatus status) {
+        using emberfield::SolveStatus;
         switch (status) {
         case SolveStatus::Converged:
             return "Converged";
@@ -30,7 +30,7 @@ namespace {
     /** @brief 独立计算主机矩阵向量积，使用扩展精度累加。
      * @param matrix 主机 CSR。@param x 输入。@pre 长度匹配。
      * @return 双精度结果。@code auto b = hostMultiply(matrix, exact); @endcode */
-    std::vector<double> hostMultiply(const thermofem::io::HostCsr& matrix, const std::vector<double>& x) {
+    std::vector<double> hostMultiply(const emberfield::io::HostCsr& matrix, const std::vector<double>& x) {
         std::vector<double> result(static_cast<std::size_t>(matrix.rows_));
         for (int row = 0; row < matrix.rows_; ++row) {
             long double sum{};
@@ -52,7 +52,7 @@ namespace {
  * @code ./build/example/solve-matrix data/kvlcc-351k-Velx-1000.mtx amg @endcode
  */
 int main(int argc, char** argv) {
-    using namespace thermofem;
+    using namespace emberfield;
     using Clock = std::chrono::steady_clock;
     std::cout << std::unitbuf << std::setprecision(12);
     try {

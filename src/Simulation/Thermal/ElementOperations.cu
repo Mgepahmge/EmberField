@@ -5,7 +5,7 @@
 #include <cmath>
 #include <limits>
 #include "LocalResultAccess.cuh"
-namespace thermofem::thermal {
+namespace emberfield::thermal {
     namespace {
         /** @brief 校验厚度因子。@param d 母元维数。@param s 厚度/1。@pre 无。
          * @note 无返回值；非法参数invalid_argument。@code section(2,s); @endcode */
@@ -177,4 +177,4 @@ namespace thermofem::thermal {
         return detail::LocalResultAccess::convection(detail::LocalResultAccess::matrix(n, std::move(matrix)),
                                                      detail::LocalResultAccess::vector(n, std::move(load)));
     }
-} // namespace thermofem::thermal
+} // namespace emberfield::thermal

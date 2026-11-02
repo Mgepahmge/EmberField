@@ -4,7 +4,7 @@
 #pragma once
 #include <DataStructure/Mesh/Mesh.cuh>
 
-namespace thermofem::fem {
+namespace emberfield::fem {
     class QuadratureRule;
     /** @brief 查询完整规则。@param family 参考拓扑族。@param degree 请求精确的总次数0..2。
      * @pre 无。@return 进程生命周期内的只读规则；未知族或degree>2抛invalid_argument。
@@ -36,4 +36,4 @@ namespace thermofem::fem {
         std::vector<std::array<double, 3>> points_; ///< 参考坐标。
         std::vector<double> weights_; ///< 含参考测度的权重。
     };
-} // namespace thermofem::fem
+} // namespace emberfield::fem

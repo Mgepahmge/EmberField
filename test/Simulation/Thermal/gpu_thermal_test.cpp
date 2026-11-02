@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include "support/IntegrationFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace thermal;
     /** @brief GPU测试前确认设备可用；无设备时明确跳过。 */
     class GpuThermal : public testing::Test {

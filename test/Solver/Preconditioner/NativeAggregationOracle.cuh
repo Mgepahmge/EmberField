@@ -6,7 +6,7 @@
 #include <array>
 #include <cstdint>
 
-namespace thermofem::testoracle {
+namespace emberfield::testoracle {
     /** @brief 主机 CSR 图，权重非负、无自环、每行列有序。
      * @code auto graph = strengthGraph(matrix, 0.25); @endcode
      */
@@ -68,4 +68,4 @@ namespace thermofem::testoracle {
      * @code auto coarse = aggregateGalerkin(a, transfer); @endcode
      */
     io::HostCsr aggregateGalerkin(const io::HostCsr& matrix, const AggregateMap& transfer);
-} // namespace thermofem::testoracle
+} // namespace emberfield::testoracle

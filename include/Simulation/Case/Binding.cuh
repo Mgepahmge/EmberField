@@ -6,7 +6,7 @@
 #include <Simulation/Case/Validation.cuh>
 #include <memory>
 
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 仍需后续组件完成的阻断检查类型。 */
     enum class PendingKind { FacetTopology, Geometry, DegreesOfFreedom, Solvability, Assembly, ResultOutput };
     /** @brief 显式记录尚未完成的计算前提。
@@ -80,4 +80,4 @@ namespace thermofem::problem {
      * @code auto r=bindCase(definition,std::make_shared<const mesh::Mesh>(data)); @endcode */
     [[nodiscard]] BindResult bindCase(const CaseDefinition& definition, std::shared_ptr<const mesh::Mesh> mesh,
                                       CaseLimits limits = {});
-} // namespace thermofem::problem
+} // namespace emberfield::problem

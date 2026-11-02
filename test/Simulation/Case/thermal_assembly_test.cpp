@@ -7,7 +7,7 @@
 #include "support/AssemblyFixture.cuh"
 #include "support/CaseFixture.cuh"
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     using namespace problem;
     using namespace assemblyfixture;
     /** @brief 准备独立测试模型。@param c 定义。@param data 网格。@pre 合法输入。

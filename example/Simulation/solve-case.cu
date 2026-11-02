@@ -9,7 +9,7 @@
 #include <iostream>
 #include <limits>
 namespace {
-    using namespace thermofem;
+    using namespace emberfield;
     /** @brief 输出输入诊断。@param d 诊断。@pre 无。@note 无返回值。
      * @code diagnostics(r.diagnostics()); @endcode */
     void diagnostics(const problem::Diagnostics& d) {
@@ -67,7 +67,7 @@ namespace {
  * @pre 有可用GPU。@return 0成功，1异常，2输入失败。
  * @code ./solve-case example/cases/transient.json @endcode */
 int main(int argc, char** argv) {
-    using namespace thermofem;
+    using namespace emberfield;
     if (argc != 2) {
         std::cerr << "用法: solve-case <case.json>\n";
         return 2;

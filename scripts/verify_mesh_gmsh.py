@@ -72,7 +72,7 @@ def main():
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
     try:
-        with tempfile.TemporaryDirectory(prefix="thermofem-gmsh-") as directory:
+        with tempfile.TemporaryDirectory(prefix="emberfield-gmsh-") as directory:
             directory = pathlib.Path(directory)
             cases = [(2, False, False), (2, False, True), (2, True, False), (3, False, False)]
             count = 0

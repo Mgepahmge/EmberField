@@ -11,7 +11,7 @@
  * @code mesh-roundtrip input.msh output.msh binary 4.1 @endcode
  */
 int main(int argc, char** argv) {
-    using namespace thermofem::io;
+    using namespace emberfield::io;
     if (argc < 4 || argc > 5 || (std::string_view(argv[3]) != "ascii" && std::string_view(argv[3]) != "binary") ||
         (argc == 5 && std::string_view(argv[4]) != "2.2" && std::string_view(argv[4]) != "4.1")) {
         std::cerr << "Usage: mesh-roundtrip input.msh output.msh ascii|binary [4.1|2.2]\n";

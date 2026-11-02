@@ -15,7 +15,7 @@
 ```cpp
 #include <FEM/Space/Space.cuh>
 
-using namespace thermofem;
+using namespace emberfield;
 std::vector<mesh::CellRef> active{{0, 0}, {0, 1}};
 std::vector<fem::ElementKey> keys(active.size(), {mesh::CellFamily::Triangle});
 auto result = fem::buildFiniteElementSpace(mesh, active, keys);
@@ -39,7 +39,7 @@ if (result.space_) {
 
 ```cpp
 #include <Simulation/Case/TemperatureSpace.cuh>
-auto space = thermofem::problem::buildTemperatureSpace(*binding.bound_);
+auto space = emberfield::problem::buildTemperatureSpace(*binding.bound_);
 ```
 
 绑定必须已经成功；本接口不要求整个算例已可执行，也不更改原始绑定报告。编号成功只表明空间建立，几何、积分、共享DOF上的物理条件、组装与结果输出仍待后续组件完成。

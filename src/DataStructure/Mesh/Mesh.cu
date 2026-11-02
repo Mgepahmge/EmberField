@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
-namespace thermofem::mesh {
+namespace emberfield::mesh {
     namespace {
         /** @brief 拒绝非法结构。@param condition 要求满足的条件。@param message 上下文。
          * @pre message有效。@note 无返回值，失败抛invalid_argument。@code require(n>0,"size"); @endcode */
@@ -207,4 +207,4 @@ namespace thermofem::mesh {
         return std::span<const Index>(b.nodes_).subspan(b.offsets_[element],
                                                         b.offsets_[element + 1] - b.offsets_[element]);
     }
-} // namespace thermofem::mesh
+} // namespace emberfield::mesh

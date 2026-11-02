@@ -5,7 +5,7 @@
 #include <DataStructure/Storage/CsrMatrix.cuh>
 #include <DataStructure/Storage/Vector.cuh>
 #include <FEM/Assembly/Plan.cuh>
-namespace thermofem::assembly {
+namespace emberfield::assembly {
     using Matrix = CsrMatrix<double, Index>; ///< 规范全局双精度64位CSR。
     /** @brief 接管完整组装结果的组合值。
      * @code auto values=std::move(accumulator).release(); @endcode */
@@ -49,4 +49,4 @@ namespace thermofem::assembly {
         Matrix matrix_; ///< 当前设备矩阵。
         Vector<double> load_; ///< 当前设备载荷。
     };
-} // namespace thermofem::assembly
+} // namespace emberfield::assembly

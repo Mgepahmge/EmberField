@@ -4,7 +4,7 @@
 #pragma once
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <cmath>
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     /** @brief 使用部分主元 LU 求解有界的小规模粗层系统；不依赖 cuSOLVER。
      * @details 构造时将 CSR 累加为行主序稠密矩阵，记录逐步主元交换并原地保存 LU。
      * apply 仅应用交换、前代和回代，复用主机右端缓存；不会重新分解矩阵。
@@ -26,7 +26,7 @@ namespace thermofem::linalg {
          */
         template <CsrIndex I>
         explicit CoarseLu(const CsrMatrix<T, I>& matrix) :
-            n_(matrix.rowCount()), lu_(thermofem::detail::checkedProduct(n_, n_), 0), pivots_(n_), rhs_(n_) {
+            n_(matrix.rowCount()), lu_(emberfield::detail::checkedProduct(n_, n_), 0), pivots_(n_), rhs_(n_) {
             if (!n_ || n_ != matrix.columnCount()) {
                 throw std::invalid_argument("Coarse LU requires a nonempty square matrix");
             }
@@ -107,4 +107,4 @@ namespace thermofem::linalg {
         std::vector<T> rhs_; ///< 三角求解缓存。
     };
 
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

@@ -1,4 +1,4 @@
-PROJECT_NAME           = ThermoFEM
+PROJECT_NAME           = EmberField
 PROJECT_NUMBER         = 0.1.0
 PROJECT_BRIEF          = "基于 CUDA 的热传导有限元求解器"
 OUTPUT_DIRECTORY       = build/docs

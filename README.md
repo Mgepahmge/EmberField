@@ -1,6 +1,6 @@
-# ThermoFEM
+# EmberField
 
-ThermoFEM 是本科毕业设计“基于有限元的热力学仿真求解器设计与实现”的代码项目，采用 CUDA 和 C++20 开发。
+EmberField 是本科毕业设计“基于有限元的热力学仿真求解器设计与实现”的代码项目，采用 CUDA 和 C++20 开发。
 
 ## 项目目标
 
@@ -15,7 +15,7 @@ ThermoFEM 是本科毕业设计“基于有限元的热力学仿真求解器设�
 ## 项目结构
 
 ```text
-ThermoFEM/
+EmberField/
 ├── include/                   # 公共头文件，.cuh
 │   ├── DataStructure/         # Storage、Mesh
 │   ├── Numerics/              # LinearAlgebra、LinearSystem
@@ -89,7 +89,7 @@ ThermoFEM/
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
-./build/thermofem
+./build/emberfield
 ./build/example/version
 ./build/example/storage
 ./build/example/linear-algebra
@@ -105,7 +105,7 @@ cmake -S . -B build \
   -DCMAKE_CUDA_ARCHITECTURES=89
 ```
 
-默认启用测试和示例；可分别通过 `-DBUILD_TESTING=OFF` 和 `-DTHERMOFEM_BUILD_EXAMPLES=OFF` 关闭。使用本地 GoogleTest 源码：
+默认启用测试和示例；可分别通过 `-DBUILD_TESTING=OFF` 和 `-DEMBERFIELD_BUILD_EXAMPLES=OFF` 关闭。使用本地 GoogleTest 源码：
 
 ```bash
 cmake -S . -B build \
@@ -123,11 +123,11 @@ cmake --install build --prefix "$PWD/install"
 其他 CUDA/C++20 CMake 项目可通过安装前缀查找并链接：
 
 ```cmake
-find_package(ThermoFEM 0.1 CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE ThermoFEM::thermofem)
+find_package(EmberField 0.1 CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE EmberField::emberfield)
 ```
 
-配置使用方时传入 `-DCMAKE_PREFIX_PATH=/path/to/ThermoFEM/install`，并确保 CUDA Toolkit 可被找到。
+配置使用方时传入 `-DCMAKE_PREFIX_PATH=/path/to/EmberField/install`，并确保 CUDA Toolkit 可被找到。
 
 ## 文档
 
@@ -175,7 +175,7 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 首次配置由仓库维护者完成：
 
 1. 在文档仓库的 Settings → Deploy keys 添加专用 SSH 公钥，并启用 Allow write access。
-2. 在代码仓库 ThermoFEM 的 Settings → Secrets and variables → Actions 添加名为 `DOCS_DEPLOY_KEY` 的 secret，内容为对应的完整私钥。
+2. 在代码仓库 EmberField 的 Settings → Secrets and variables → Actions 添加名为 `DOCS_DEPLOY_KEY` 的 secret，内容为对应的完整私钥。
 3. 首次工作流创建 gh-pages 分支后，在文档仓库 Settings → Pages 选择 Deploy from a branch，分支 gh-pages，目录 / (root)。
 
 文档站点地址为 <https://mgepahmge.github.io/ThermoFEM-Doc/>。

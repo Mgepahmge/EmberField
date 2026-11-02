@@ -6,7 +6,7 @@
 #include <cublas_v2.h>
 #include <cusparse.h>
 
-namespace thermofem::linalg {
+namespace emberfield::linalg {
     /** @brief 提供执行上下文的内部错误检查与 CUDA 内核。 */
     namespace {
         /** @brief 检查库状态。@tparam S 状态枚举。@param status 返回状态。
@@ -271,4 +271,4 @@ namespace thermofem::linalg {
     template class IterationContext<double, std::int32_t>;
     template class IterationContext<float, std::int64_t>;
     template class IterationContext<double, std::int64_t>;
-} // namespace thermofem::linalg
+} // namespace emberfield::linalg

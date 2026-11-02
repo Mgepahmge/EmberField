@@ -7,8 +7,8 @@
 namespace integrationfixture {
     /** @brief 创建单个标准单纯形数据。@param d 维数2或3。@pre 合法维数。
      * @return 拥有数据。@code auto m=data(2); @endcode */
-    inline thermofem::mesh::MeshData data(unsigned d = 2) {
-        using namespace thermofem::mesh;
+    inline emberfield::mesh::MeshData data(unsigned d = 2) {
+        using namespace emberfield::mesh;
         MeshData m;
         m.nodes_ = {{91, {0, 0, 0}, {}, {}}, {37, {1, 0, 0}, {}, {}}, {10000000001ULL, {0, 1, 0}, {}, {}}};
         if (d == 3) {
@@ -27,8 +27,8 @@ namespace integrationfixture {
     }
     /** @brief 由所有体单元建立空间。@param m 网格数据。@pre 仅支持单纯形体块。
      * @return 不可变空间；无效夹具抛logic_error。@code auto s=space(data()); @endcode */
-    inline std::shared_ptr<const thermofem::fem::FiniteElementSpace> space(thermofem::mesh::MeshData m = data()) {
-        using namespace thermofem;
+    inline std::shared_ptr<const emberfield::fem::FiniteElementSpace> space(emberfield::mesh::MeshData m = data()) {
+        using namespace emberfield;
         std::vector<mesh::CellRef> cells;
         std::vector<fem::ElementKey> keys;
         for (std::size_t b = 0; b < m.elements_.size(); ++b) {
@@ -45,8 +45,8 @@ namespace integrationfixture {
     }
     /** @brief 创建完整几何。@param m 数据。@param o 策略。@pre 维数与策略匹配。
      * @return 已准备几何。@code auto g=geometry(data()); @endcode */
-    inline std::shared_ptr<const thermofem::fem::PreparedGeometry> geometry(thermofem::mesh::MeshData m = data(),
-                                                                            thermofem::fem::GeometryOptions o = {}) {
-        return thermofem::fem::buildPreparedGeometry(space(std::move(m)), o);
+    inline std::shared_ptr<const emberfield::fem::PreparedGeometry> geometry(emberfield::mesh::MeshData m = data(),
+                                                                             emberfield::fem::GeometryOptions o = {}) {
+        return emberfield::fem::buildPreparedGeometry(space(std::move(m)), o);
     }
 } // namespace integrationfixture

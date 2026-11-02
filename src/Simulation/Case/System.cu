@@ -6,7 +6,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <string>
-namespace thermofem::problem {
+namespace emberfield::problem {
     bool SolvabilityReport::canBuildSystem() const noexcept {
         return !components_.empty() &&
             std::all_of(components_.begin(), components_.end(), [](const ComponentCheck& c) { return c.anchored(); });
@@ -117,4 +117,4 @@ namespace thermofem::problem {
         }
         return TimeStep{completed + 1, current, end, duration};
     }
-} // namespace thermofem::problem
+} // namespace emberfield::problem

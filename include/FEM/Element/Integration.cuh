@@ -4,7 +4,7 @@
 #pragma once
 #include <FEM/Element/Geometry.cuh>
 #include <FEM/Element/Quadrature.cuh>
-namespace thermofem::fem {
+namespace emberfield::fem {
     class CellIntegrationData;
     class FacetIntegrationData;
     /** @brief 构建单元积分表。@param geometry 已准备几何。@param cellRow 活动行。
@@ -136,4 +136,4 @@ namespace thermofem::fem {
         std::vector<double> traceValues_; ///< q*nf+a的迹值。
         std::vector<std::array<double, 3>> normals_; ///< 每点外法向。
     };
-} // namespace thermofem::fem
+} // namespace emberfield::fem

@@ -3,7 +3,7 @@
  */
 #pragma once
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
-namespace thermofem {
+namespace emberfield {
     /** @brief 迭代平滑器接口，apply 从传入初值更新近似解。
      * @details 继承仅表达算法角色；矩阵、工作区等资源由具体实现组合持有。
      * setup 建立与矩阵关联的状态，apply 修改近似解但不改变右端项。
@@ -27,4 +27,4 @@ namespace thermofem {
          */
         virtual void apply(const Vector<T>& rhs, Vector<T>& x) = 0;
     };
-} // namespace thermofem
+} // namespace emberfield

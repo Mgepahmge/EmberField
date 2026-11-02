@@ -8,16 +8,16 @@
 namespace casefixture {
     /** @brief 创建标签选择器。@param dimension 维数。@param tag 标签。@pre 无。
      * @return 选择器。@code auto r=group(2,11); @endcode */
-    inline thermofem::problem::RegionSelector group(int dimension, std::int64_t tag) {
-        thermofem::problem::RegionSelector s;
+    inline emberfield::problem::RegionSelector group(int dimension, std::int64_t tag) {
+        emberfield::problem::RegionSelector s;
         s.dimension_ = dimension;
         s.tag_ = tag;
         return s;
     }
     /** @brief 创建一份活动域中包含两三角形的网格。@pre 无。
      * @return 构建数据。@code auto data=meshData(); @endcode */
-    inline thermofem::mesh::MeshData meshData() {
-        using namespace thermofem::mesh;
+    inline emberfield::mesh::MeshData meshData() {
+        using namespace emberfield::mesh;
         MeshData d;
         d.nodes_ = {{5000000001ULL, {0, 0, 0}, {}, {}},
                     {8, {1, 0, 0}, {}, {}},
@@ -46,8 +46,8 @@ namespace casefixture {
     }
     /** @brief 创建合法稳态二维算例。@pre 无。
      * @return 独立定义。@code auto c=definition(); @endcode */
-    inline thermofem::problem::CaseDefinition definition() {
-        using namespace thermofem::problem;
+    inline emberfield::problem::CaseDefinition definition() {
+        using namespace emberfield::problem;
         CaseDefinition c;
         c.analysis_.thickness_ = 0.01;
         c.analysis_.domain_ = group(2, 11);
@@ -61,8 +61,8 @@ namespace casefixture {
     }
     /** @brief 将定义转换为合法瞬态。@param c 待修改定义。@pre 有材料。
      * @note 无返回值。@code makeTransient(c); @endcode */
-    inline void makeTransient(thermofem::problem::CaseDefinition& c) {
-        using namespace thermofem::problem;
+    inline void makeTransient(emberfield::problem::CaseDefinition& c) {
+        using namespace emberfield::problem;
         c.analysis_.type_ = AnalysisType::Transient;
         c.initialState_ = InitialState{ConstantScalar{300}, {}};
         c.time_ = TimeOptions{0, 10, 0.1, 1000};
@@ -72,13 +72,13 @@ namespace casefixture {
     }
     /** @brief 检查诊断码。@param d 诊断。@param code 目标码。@pre 无。
      * @return 是否存在。@code auto found=hasCode(d,"MATERIAL_GAP"); @endcode */
-    inline bool hasCode(const thermofem::problem::Diagnostics& d, const std::string& code) {
+    inline bool hasCode(const emberfield::problem::Diagnostics& d, const std::string& code) {
         return std::any_of(d.entries().begin(), d.entries().end(), [&](const auto& v) { return v.code_ == code; });
     }
     /** @brief 绑定测试定义。@param c 定义。@param d 网格数据。@pre 网格合法。
      * @return 绑定结果。@code auto r=bind(definition()); @endcode */
-    inline thermofem::problem::BindResult bind(const thermofem::problem::CaseDefinition& c,
-                                               thermofem::mesh::MeshData d = meshData()) {
-        return thermofem::problem::bindCase(c, std::make_shared<const thermofem::mesh::Mesh>(std::move(d)));
+    inline emberfield::problem::BindResult bind(const emberfield::problem::CaseDefinition& c,
+                                                emberfield::mesh::MeshData d = meshData()) {
+        return emberfield::problem::bindCase(c, std::make_shared<const emberfield::mesh::Mesh>(std::move(d)));
     }
 } // namespace casefixture

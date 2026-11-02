@@ -8,19 +8,19 @@
 TEST(MatrixMarketTest, groupsUnsortedCoordinatesAndPreservesDuplicates) {
     std::istringstream input(
         "%%MatrixMarket matrix coordinate real general\n% comment\n3 3 4\n3 1 2\n1 2 4\n1 2 -1\n3 3 5\n");
-    const auto matrix = thermofem::io::readMatrixMarket(input);
+    const auto matrix = emberfield::io::readMatrixMarket(input);
     EXPECT_EQ(matrix.offsets_, (std::vector<int>{0, 2, 2, 4}));
     EXPECT_EQ(matrix.indices_, (std::vector<int>{1, 1, 0, 2}));
     EXPECT_EQ(matrix.values_, (std::vector<double>{4, -1, 2, 5}));
 }
 TEST(MatrixMarketTest, expandsSymmetricTriangleAndAcceptsEmpty) {
     std::istringstream input("%%MatrixMarket matrix coordinate integer symmetric\n2 2 3\n1 1 2\n2 1 -1\n2 2 3\n");
-    const auto matrix = thermofem::io::readMatrixMarket(input);
+    const auto matrix = emberfield::io::readMatrixMarket(input);
     EXPECT_EQ(matrix.offsets_, (std::vector<int>{0, 2, 4}));
     EXPECT_EQ(matrix.indices_, (std::vector<int>{0, 1, 0, 1}));
     EXPECT_EQ(matrix.values_, (std::vector<double>{2, -1, -1, 3}));
     std::istringstream empty("%%MatrixMarket matrix coordinate real general\n0 0 0\n");
-    EXPECT_EQ(thermofem::io::readMatrixMarket(empty).offsets_, (std::vector<int>{0}));
+    EXPECT_EQ(emberfield::io::readMatrixMarket(empty).offsets_, (std::vector<int>{0}));
 }
 TEST(MatrixMarketTest, rejectsMalformedUnsupportedAndNonfiniteInputs) {
     const std::vector<std::string> inputs{"",
@@ -40,6 +40,6 @@ TEST(MatrixMarketTest, rejectsMalformedUnsupportedAndNonfiniteInputs) {
     for (const auto& text : inputs) {
         SCOPED_TRACE(text);
         std::istringstream input(text);
-        EXPECT_THROW(thermofem::io::readMatrixMarket(input), std::runtime_error);
+        EXPECT_THROW(emberfield::io::readMatrixMarket(input), std::runtime_error);
     }
 }

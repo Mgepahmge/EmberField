@@ -5,7 +5,7 @@
 #include <FEM/Assembly/Operations.cuh>
 #include <Simulation/Case/GpuPreparation.cuh>
 /** @brief 物理算例的组装适配，不承担通用稀疏运算。 */
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 有界流式组装选项。@code ThermalAssemblyOptions o; o.batchElements_=256; @endcode */
     struct ThermalAssemblyOptions {
         assembly::AssemblyLimits limits_; ///< 全局符号预算。
@@ -69,4 +69,4 @@ namespace thermofem::problem {
      * @throws std::invalid_argument 空计划；积分、数值和CUDA异常传播。
      * @code auto model=assembleThermalModel(plan); @endcode */
     [[nodiscard]] AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan);
-} // namespace thermofem::problem
+} // namespace emberfield::problem

@@ -4,7 +4,7 @@
 #pragma once
 #include <Simulation/Case/Conditions.cuh>
 #include <Simulation/Thermal/ElementOperations.cuh>
-namespace thermofem::problem {
+namespace emberfield::problem {
     /** @brief 本次准备的独立阶段，不等同完整执行能力。 */
     enum class PreparationStage { Geometry, IntegrationCompatibility, Conditions };
     /** @brief 某阶段未执行、通过或失败。 */
@@ -118,4 +118,4 @@ namespace thermofem::problem {
         std::optional<thermal::LocalMatrix> capacity_; ///< 瞬态M。
         thermal::LocalVector load_; ///< 合计体源。
     };
-} // namespace thermofem::problem
+} // namespace emberfield::problem

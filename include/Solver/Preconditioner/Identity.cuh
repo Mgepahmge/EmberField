@@ -5,7 +5,7 @@
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Solver/Preconditioner/Preconditioner.cuh>
 #include <cmath>
-namespace thermofem {
+namespace emberfield {
     /** @brief 恒等预条件子，以同一接口支持无预条件求解。
      * @code Identity<double> identity; identity.setup(a); identity.apply(b, z); @endcode
      */
@@ -40,4 +40,4 @@ namespace thermofem {
         std::size_t size_{}; ///< 已校验方阵的维度，零表示未初始化。
         int device_{-1}; ///< 所属设备。
     };
-} // namespace thermofem
+} // namespace emberfield

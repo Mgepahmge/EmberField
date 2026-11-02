@@ -6,7 +6,7 @@
 #include <Solver/Iterative/Solver.cuh>
 #include <Solver/Preconditioner/Identity.cuh>
 
-namespace thermofem {
+namespace emberfield {
     /** @brief 配置 CG 容差、迭代上限和真实残差刷新周期。
      * @code CgOptions<double> options; options.relativeTolerance_ = 1e-10; @endcode */
     template <linalg::Scalar T>
@@ -193,4 +193,4 @@ namespace thermofem {
         std::unique_ptr<Preconditioner<T, I>> preconditioner_; ///< 独占可注入预条件组件。
         std::unique_ptr<State> state_; ///< 当前成功 setup 对应的状态。
     };
-} // namespace thermofem
+} // namespace emberfield
