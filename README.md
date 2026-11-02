@@ -4,113 +4,69 @@ EmberField 是本科毕业设计“基于有限元的热力学仿真求解器设
 
 ## 项目目标
 
-- 建立稳态与瞬态热传导模型，设计网格、材料属性及边界条件的数据结构。
-- 实现单元矩阵计算、全局稀疏矩阵组装，以及温度、热流和对流换热边界条件处理。
-- 实现稀疏线性方程组求解与时间步进，完成稳态和瞬态温度场计算。
-- 封装求解器接口并导出仿真结果，提供展示模型配置、求解过程和温度场结果的 Demo。
-- 通过典型算例与解析解或成熟仿真软件对比，验证计算精度与求解性能。
-
-基础数据结构包括支持 global、pinned、mapped、managed 策略的 RAII CUDA Buffer，以及向量、行主序稠密矩阵和 CSR 稀疏矩阵。线性代数层使用 cuBLAS/cuSPARSE，提供命名函数与运算符。求解流程包括加权 Jacobi 平滑器、GPU 原生聚合 AMG 预条件子、CG和右预条件 BiCGStab 求解器，通过独立基类的 setup/apply 接口组合，不使用 cuSOLVER。AMG 提供 V、W、F 三种循环。Triangle3/Tet4连续P1热后端提供完整配置到全局A、b的GPU组装、稳态求解及后向Euler时间推进。
+- 建立稳态与瞬态热传导模型，描述网格、材料属性、热源及边界条件。
+- 实现有限元离散、单元矩阵计算、GPU 全局稀疏组装及边界条件处理。
+- 实现稀疏线性方程组求解与时间步进，计算稳态和瞬态温度场。
+- 提供算例配置、求解及结果导出接口，通过典型算例验证精度与性能。
 
 ## 项目结构
 
 ```text
 EmberField/
-├── include/                   # 公共头文件，.cuh
-│   ├── DataStructure/         # Storage、Mesh
-│   ├── Numerics/              # LinearAlgebra、LinearSystem
-│   ├── Solver/                # Iterative、Preconditioner、Smoother
-│   ├── FEM/                   # Element、Space、Assembly
-│   ├── Simulation/            # Case、Thermal
-│   ├── IO/                    # Mesh、Case、Matrix
-│   └── version.cuh            # 库版本接口
-├── src/                       # 按同样两级分类存放 CUDA 实现
-├── test/                      # GoogleTest 测试，.cpp，独立 CMakeLists.txt
-├── example/                   # CUDA 示例，独立 CMakeLists.txt
-├── scripts/build-docs.sh       # 一键构建文档
-├── scripts/format.sh           # 格式化与格式检查
-├── docs/Doxyfile               # Doxygen 配置
-├── cmake/                     # 安装后的 CMake 包配置模板
+├── include/          # 公共头文件
+├── src/              # CUDA 实现与程序入口
+├── test/             # GoogleTest 测试
+├── example/          # 示例程序与算例
+├── third-party/      # 第三方依赖及许可证
+├── scripts/          # 项目脚本
+├── docs/             # 设计文档、用户手册及 Doxygen 配置
+├── cmake/            # CMake 包配置模板
 ├── CMakeLists.txt
 ├── README.md
-├── LICENSE
-├── .clang-format
-└── .gitignore
+└── LICENSE
 ```
-
-除测试用例外，所有源文件使用 `.cu`，所有项目头文件使用 `.cuh`。
-
-`test/` 按上述分类组织用例，跨模块公共夹具位于 `test/support/`；`example/` 按用途分类。
-求解器、预条件子、平滑器分别在自己的目录中定义基类。AMG 专用聚合、传输、粗层 LU
-和 V/W/F 调度位于 `src/Solver/Preconditioner/Amg.cu` 内，以独立内部接口组合，公共头文件
-只提供 AMG 配置、诊断和预条件接口。目录归属依据模块职责，不为单一模块的内部组件新增公共分类。
-
-算例层位于 `include/Simulation/Case/`，JSON适配位于 `include/IO/Case/Case.cuh`，独立的单元侧拓扑位于 `include/DataStructure/Mesh/FacetTopology.cuh`。配置读取使用随源码分发的 `third-party/picojson/`，无需另外安装JSON包；原始BSD许可证随源码和安装产物保留，不受本项目MIT许可证替代。
-
-## 算例输入与绑定
-
-支持版本1的严格UTF-8 JSON算例配置：稳态/瞬态、二维平面/三维实体、SI单位常物性材料、物理组与并交差区域选择、体源、温度/外向热流/对流边界、初温、时间/离散/求解/输出意图。拒绝重复键、未知字段、错类型与超限输入；物理标签使用精确int64，不经过double。完整协议、默认值与边界见 [算例输入手册](docs/case.md)。
-
-```bash
-./build/example/case-inspect example/cases/steady.json
-./build/example/case-inspect example/cases/transient.json
-```
-
-`case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；绑定对象列出需后续组件检查的pending项目，不随下游处理修改。使用`solve-case`继续生成A、b并求解；VTU导出属于独立输出职责。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
-
-有限元空间层位于 `include/FEM/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功后仍须由后续组件完成几何、物理约束、组装和系统检查。
-
-## 几何、条件与局部热运算
-
-已经支持Triangle3/Tet4的米制仿射几何、体/侧数值积分、独立导热/一致容量/体热源/向外热流/对流运算，以及规定温度与初态的共享DOF一致性检查。批量热积分提供GPU路径，设备表可复用，结果保留在GPU供后续装配消费；几何拓扑和条件检查在主机完成。
-
-```bash
-./build/example/prepare-inspect example/cases/steady.json cpu
-./build/example/prepare-inspect example/cases/transient.json gpu
-```
-
-`prepare-inspect`流式检查全部局部贡献，gpu模式与独立主机路径逐项比较，不是性能基准。使用、单位、错误边界和GPU批次所有权见[热离散准备手册](docs/thermal-preparation.md)。当前仍未进行全局CSR装配、对称温度消元、时间推进或结果场写出；准备通过不表示全局可解或适合CG。
 
 ## 环境要求
 
-- Linux 与 Bash（文档脚本使用 Bash）。
-- CMake 3.24 或更新版本。
-- CUDA Toolkit 12.0 或更新版本，以及该版本支持、具备 C++20 支持的宿主 C++ 编译器。
-- 运行 GPU 计算需要 CUDA 兼容的 NVIDIA GPU 和与 Toolkit 兼容的驱动。
-- GoogleTest：优先使用已安装的 CMake 包；未找到时自动获取 `v1.17.0`，首次配置需要访问 GitHub。可通过 `FETCHCONTENT_SOURCE_DIR_GOOGLETEST` 指定离线源码目录。
-- Doxygen（生成文档时需要，不依赖 Graphviz 或 LaTeX）。
-
-默认编译架构为 `75`，请根据目标 GPU 和 Toolkit 支持范围设置 `CMAKE_CUDA_ARCHITECTURES`；例如 Ada GPU 可指定 `89`。`version` 仅调用版本接口；`storage` 包含真实 CUDA 内核，并要求设备支持映射内存和统一内存。测试在设备不可用时明确跳过 GPU 用例。
+| 依赖 | 版本与兼容性要求 | 用途与获取方式 | 说明 |
+| --- | --- | --- | --- |
+| CUDA Toolkit 与 NVCC | **12.0 或更新版本** | 构建必需；使用同一套 Toolkit 提供的 NVCC、CUDA Runtime、cuBLAS 和 cuSPARSE | 12.0 是 NVCC 最早支持 C++20 的版本；使用其他版本 NVCC 时，须自行查询对应版本的 HOST 编译器支持范围和驱动要求 |
+| GCC/G++（Linux） | NVCC 12.0：**GCC/G++ 10 至 12.1** | 构建必需；GCC 与 G++ 使用匹配版本 | C++20 要求 GCC 10 起；12.2.1 为实验支持，建议选择正式支持的版本 |
+| MSVC（Windows） | NVCC 12.0：**Visual Studio 2022 / MSVC 19.3x** | 构建必需；安装对应的 Visual Studio C++ 工具集与 Windows SDK | 建议 VS 2022 17.4，修复了早期版本的 C++20 `<complex>` / `std::_Bit_cast` 编译问题 |
+| CMake | **3.24 或更新版本** | 配置、构建与安装必需 | 项目配置规定的最低版本 |
+| NVIDIA GPU 与驱动 | CUDA 12.0 GA：最低 **Linux x86_64 525.60.13 / Windows x86_64 527.41** | 运行 GPU 计算及 GPU 测试时必需 | GPU 架构须受所选 Toolkit 支持；以上驱动基线仅针对 CUDA 12.0 GA，其他版本须另行核对 |
+| GoogleTest | 推荐 **1.17.0**；默认下载 `v1.17.0` | 启用测试时需要；优先使用已安装的 CMake 包，否则通过 Git 获取，也可指定离线源码 | 不构建测试时无需安装 |
+| Doxygen | 推荐 **1.9.1 或更新版本** | 仅自行生成文档时需要 | 项目未强制最低版本；不需要 Graphviz 或 LaTeX |
+| Bash | 可执行项目中的 Bash 脚本 | 使用文档构建脚本时需要 | 也可通过 CMake 的 `docs` 目标生成文档 |
+| picojson | 使用源码内附版本 | JSON 解析；位于 `third-party/picojson/` | 随项目发布，无需另行安装 |
 
 ## 构建与运行
 
-在项目根目录执行：
+以下命令在项目根目录执行，使用 Bash 语法：
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ./build/emberfield
-./build/example/version
-./build/example/storage
-./build/example/linear-algebra
-./build/example/poisson-amg
 ctest --test-dir build --output-on-failure
 ```
 
-指定 CUDA 编译器和目标架构：
+默认目标 GPU 架构为 `75`。请按实际 GPU 和 Toolkit 支持范围设置，例如 RTX A6000 使用 `86`：
 
 ```bash
 cmake -S . -B build \
   -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
-  -DCMAKE_CUDA_ARCHITECTURES=89
+  -DCMAKE_CUDA_ARCHITECTURES=86
 ```
 
-默认启用测试和示例；可分别通过 `-DBUILD_TESTING=OFF` 和 `-DEMBERFIELD_BUILD_EXAMPLES=OFF` 关闭。使用本地 GoogleTest 源码：
+测试与示例默认启用，可分别通过 `-DBUILD_TESTING=OFF` 和 `-DEMBERFIELD_BUILD_EXAMPLES=OFF` 关闭。首次自动获取 GoogleTest 需要 Git 和 GitHub 网络访问；离线构建时指定已有源码：
 
 ```bash
 cmake -S . -B build \
   -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/path/to/googletest
 ```
+
+`emberfield` 当前输出库版本；完整算例的运行方法与示例见用户文档。
 
 ## 安装
 
@@ -118,95 +74,30 @@ cmake -S . -B build \
 cmake --install build --prefix "$PWD/install"
 ```
 
-安装内容包括主程序、静态库、公共 `.cuh` 头文件、MIT 许可证和 CMake 包配置。示例、测试及其依赖不安装。
-
-其他 CUDA/C++20 CMake 项目可通过安装前缀查找并链接：
+安装主程序、静态库、公共头文件、许可证及 CMake 包配置。其他 CUDA/C++20 项目可通过安装前缀查找并链接：
 
 ```cmake
 find_package(EmberField 0.1 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE EmberField::emberfield)
 ```
 
-配置使用方时传入 `-DCMAKE_PREFIX_PATH=/path/to/EmberField/install`，并确保 CUDA Toolkit 可被找到。
+配置使用方时传入 `-DCMAKE_PREFIX_PATH=/path/to/EmberField/install`。
 
 ## 文档
 
-基础数据结构的接口、内存策略、复制与移动语义及同步要求见 [基础数据结构](docs/data-structures.md)。
-线性代数接口及当前限制见 [线性代数](docs/linear-algebra.md)。
-分层接口、CG/BiCGStab 求解参数、异常保证及 V/W/F 语义见 [求解组件](docs/solver.md)。
-矩阵输入、命令行求解及输出含义见 [Matrix Market 用户手册](docs/matrix-market.md)。
-完整文档分类见 [文档目录](docs/index.md)。
+在线阅读：[EmberField 文档](https://mgepahmge.github.io/EmberField-Doc/)。源码中的文档入口见 [文档目录](docs/index.md)。
 
-在任意目录执行项目脚本即可生成中文 Doxygen 文档：
+安装 Doxygen 后，在项目根目录执行：
 
 ```bash
 bash scripts/build-docs.sh
 ```
 
-上述相对路径命令从项目根目录执行；从其他目录使用脚本的绝对路径。输出入口为 `build/docs/html/index.html`。如果配置 CMake 时已找到 Doxygen，也可执行 `cmake --build build --target docs`。
-
-`<Solver/Iterative/Cg.cuh>` 提供默认使用恒等预条件子的 CG 求解器，用于对称正定矩阵。
-注入预条件子时，其动作也必须固定、线性且对称正定。
-AMG 配合 PCG 的循环、对称平滑、各层权重和粗层求解前提见 [求解组件](docs/solver.md)；默认参数并不对任意 SPD 矩阵保证相容。
-
-## 代码格式
-
-代码格式由根目录 `.clang-format` 统一定义，CUDA 源文件、项目头文件和 C++ 测试均须格式化。
-需要支持 `InsertBraces` 与 `InsertNewlineAtEOF` 的 clang-format，建议统一使用 23.1.3。
+生成的 HTML 入口为 `build/docs/html/index.html`。如果配置 CMake 时已找到 Doxygen，也可执行：
 
 ```bash
-bash scripts/format.sh --write
-bash scripts/format.sh --check
+cmake --build build --target docs
 ```
-
-脚本只处理 src、include、test 和 example 目录内的 CUDA 源文件、CUDA 头文件及 C++ 测试文件。
-可通过 `CLANG_FORMAT=/path/to/clang-format` 指定程序。配置 CMake 时若找到 clang-format，
-还可使用 `cmake --build build --target format` 或 `format-check`。
-
-## 持续集成
-
-GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文档构建发布，不配置 CUDA 构建或 GPU 测试。
-代码格式检查在 push、Pull Request 或手动触发时执行，固定使用 clang-format 23.1.3。
-文档工作流在 main 分支 push 或手动触发时执行，直接调用 Doxygen，无需 CUDA Toolkit。
-
-生成的 HTML 通过 SSH 发布至 [EmberField-Doc](https://github.com/Mgepahmge/EmberField-Doc) 的 gh-pages 分支根目录。
-文档未变化时不创建提交；发布保留分支历史，并清除已删除的页面。
-
-首次配置由仓库维护者完成：
-
-1. 在文档仓库的 Settings → Deploy keys 添加专用 SSH 公钥，并启用 Allow write access。
-2. 在代码仓库 EmberField 的 Settings → Secrets and variables → Actions 添加名为 `DOCS_DEPLOY_KEY` 的 secret，内容为对应的完整私钥。
-3. 首次工作流创建 gh-pages 分支后，在文档仓库 Settings → Pages 选择 Deploy from a branch，分支 gh-pages，目录 / (root)。
-
-文档站点地址为 <https://mgepahmge.github.io/EmberField-Doc/>。
-私钥只存放在受保护的凭据文件和 Actions secret 中，不提交到任一仓库。
-工作流固定 GitHub 的 SSH 主机公钥并启用严格校验；GitHub 轮换主机公钥时需核对官方信息后更新工作流。
-
-## 网格与MSH文件
-
-`include/DataStructure/Mesh/` 提供独立于文件与物理算例的宿主网格模型，`include/IO/Mesh/Msh.cuh` 提供
-MSH4.1/2.2的ASCII与二进制加载、保存。支持高阶混合单元、实体与物理组、参数坐标、
-周期关系以及分区元数据；保存时检查目标格式的可表示性，不静默丢失信息。
-网格结构不依赖文件版本、编码或求解器，网格模块本身不承担FEM组装。
-
-```sh
-./build/example/mesh-roundtrip input.msh output.msh binary 4.1
-```
-
-完整数据契约、限制和使用方式见 [网格与MSH用户手册](docs/mesh.md)。
-
-## 全局热系统
-
-在算例加载、连续P1空间和局部积分准备后，提供独立的符号CSR计划、GPU稳定组装、
-稳态与后向Euler系统构造、对称规定温度消元及分量可解性诊断。
-数值矩阵保留在GPU，采用64位CSR，可直接使用已有CG或BiCGStab求解。
-
-```bash
-./build/example/solve-case example/cases/steady.json
-./build/example/solve-case example/cases/transient.json
-```
-
-接口、数值契约和示例范围见[全局组装与线性系统用户手册](docs/assembly-system.md)。
 
 ## 贡献
 
@@ -214,8 +105,7 @@ MSH4.1/2.2的ASCII与二进制加载、保存。支持高阶混合单元、实�
 
 ## 算法参考
 
-Jacobi、AMG 与 BiCGStab 部分的算法组织参考作者 Mgepahmge 的非公开项目 **YHAMG-GPU**。
-参考项目不作为公开依赖分发；本项目保持独立的接口、实现与测试。
+Jacobi、AMG 与 BiCGStab 部分的算法组织参考作者 Mgepahmge 的非公开项目 **YHAMG-GPU**。该参考项目不作为公开依赖分发。
 
 ## 许可证
 
