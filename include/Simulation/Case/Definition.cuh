@@ -3,10 +3,12 @@
  */
 #pragma once
 #include <Simulation/Case/Diagnostics.cuh>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -141,6 +143,54 @@ namespace emberfield::problem {
         std::size_t maxIterations_{1000}; ///< 正迭代上限。
         InitialGuess initialGuess_{InitialGuess::Zero}; ///< 与物理初温分离。
     };
+    /** @brief 类型化编码选项，与IO编码器类型分离。 */
+    enum class OutputEncoding { AppendedRaw, Ascii };
+    /** @brief 可选物理场。 */
+    enum class OutputField { Temperature, TemperatureGradient, HeatFlux };
+    /** @brief 区域统计量。 */
+    enum class RegionStatistic { TemperatureMin, TemperatureMax, TemperatureMean, StoredEnergy };
+    /** @brief 场的协议名字。@param value 枚举。@pre 无。@return 稳定名字；非法invalid_argument。
+     * @code auto name=outputFieldName(OutputField::Temperature); @endcode */
+    std::string_view outputFieldName(OutputField value);
+    /** @brief 统计量的协议名字。@param value 枚举。@pre 无。@return 稳定名字；非法invalid_argument。
+     * @code auto name=regionStatisticName(RegionStatistic::TemperatureMean); @endcode */
+    std::string_view regionStatisticName(RegionStatistic value);
+    /** @brief 输出资源上限；仅约束输出模块增量资源。@code OutputLimits limits; @endcode */
+    struct OutputLimits {
+        std::size_t maxPoints_{4000000}; ///< 活动顶点。
+        std::size_t maxCells_{1000000}; ///< 活动单元。
+        std::size_t maxHostBytes_{1073741824}; ///< 主机缓存字节。
+        std::size_t maxDeviceBytes_{536870912}; ///< 设备缓存字节。
+        std::size_t batchCells_{4096}; ///< 单批单元。
+        std::size_t maxFrames_{1000000}; ///< 帧数。
+        std::size_t maxMonitors_{1000}; ///< 监测数。
+        std::uint64_t maxOutputBytes_{107374182400ULL}; ///< 文件总字节。
+    };
+    /** @brief 热量诊断容差，不改变求解收敛判断。@code EnergyOptions e; @endcode */
+    struct EnergyOptions {
+        bool enabled_{true}; ///< 启用热量报告。
+        double absoluteToleranceW_{1e-8}; ///< 绝对功率容差。
+        double relativeTolerance_{1e-8}; ///< 相对容差。
+    };
+    /** @brief 原始节点标签定位。@code NodeMonitor m{1}; @endcode */
+    struct NodeMonitor {
+        std::uint64_t nodeTag_{}; ///< 正节点标签。
+    };
+    /** @brief 米制位置定位。@code PointMonitor m; @endcode */
+    struct PointMonitor {
+        std::array<double, 3> positionM_{}; ///< 米制位置。
+        double toleranceM_{1e-10}; ///< 非负定位容差。
+    };
+    /** @brief 区域积分和极值。@code RegionMonitor m; @endcode */
+    struct RegionMonitor {
+        RegionSelector region_; ///< 活动同维区域。
+        std::vector<RegionStatistic> statistics_{RegionStatistic::TemperatureMean}; ///< 有序统计选择。
+    };
+    /** @brief 监测身份和类型化定位。@code MonitorDefinition m{"sensor",NodeMonitor{1}}; @endcode */
+    struct MonitorDefinition {
+        std::string id_; ///< 唯一显示名称。
+        std::variant<NodeMonitor, PointMonitor, RegionMonitor> value_; ///< 定位变体。
+    };
     /** @brief 结果输出意图；不负责创建文件或生成场。
      * @code OutputOptions o; o.directory_="results"; @endcode */
     struct OutputOptions {
@@ -149,6 +199,11 @@ namespace emberfield::problem {
         std::optional<std::size_t> everySteps_; ///< 瞬态默认1；稳态禁止。
         std::optional<bool> includeInitial_; ///< 瞬态默认true；稳态禁止。
         bool includeFinal_{true}; ///< 最终状态输出，稳态必须为true。
+        OutputEncoding encoding_{OutputEncoding::AppendedRaw}; ///< 无压缩二进制或ASCII。
+        std::vector<OutputField> fields_{OutputField::Temperature}; ///< 温度及可选梯度、热流。
+        EnergyOptions energy_; ///< 能量诊断。
+        std::vector<MonitorDefinition> monitors_; ///< 有序监测。
+        OutputLimits limits_; ///< 分配和输出上限。
     };
     /** @brief 完整算例值对象，通过组合解耦物理、离散与运行配置。
      * @details 使用前调用validateCase；文件解析和网格绑定不在本类内。

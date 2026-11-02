@@ -26,7 +26,7 @@
 | time | 仅瞬态且必填，start/end/step；end>start，step>0；method仅backwardEuler；maxSteps默认1000000 |
 | discretization | family仅lagrangeContinuous，order默认1且正，quadrature仅auto |
 | linearSolver | method默认bicgstab，也接受cg；预条件子仅identity；relativeTolerance默认1e-8，absoluteTolerance默认1e-12，maxIterations默认1000；initialGuess默认zero，瞬态可用previousStep |
-| output | directory默认results、format仅vtu、fields仅单项temperature、overwrite默认false；瞬态schedule默认每步，includeInitial/includeFinal默认true |
+| output | format为vtu；默认temperature，可选梯度/热流、编码、监测、热量与资源预算，详见[结果输出](results.md)；CLI输出路径覆盖directory；overwrite默认false；瞬态schedule默认每步，includeInitial/includeFinal默认true |
 
 显式整数选项不接受`1.0`或`1e0`；布尔不接受0/1。标量字段统一写为`{"kind":"constant","value":300}`。这是数值模型的独立联合类型入口，尚不支持张量、时间表、温度依赖和表达式，不能忽略这些输入。
 

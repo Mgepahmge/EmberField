@@ -14,6 +14,7 @@
 | [有限元空间](finite-element-space.md) | 形函数、自由度与局部映射 |
 | [离散准备](thermal-preparation.md) | 几何、积分、条件与GPU局部热算子 |
 | [全局组装与线性系统](assembly-system.md) | GPU稳定散加、稳态、后向Euler与对称消元 |
+| [命令行与结果文件](results.md) | 算例运行、输出路径、VTU/PVD、监测、热量及故障语义 |
 
 构建、安装和 Doxygen 生成方法见项目根目录的 [README](../README.md)。
 文档只维护设计和使用所需的信息，不收录开发日志、修复经过、阶段进度或逐次测试记录。

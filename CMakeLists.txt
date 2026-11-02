@@ -25,6 +25,11 @@ add_library(emberfield STATIC src/version.cu src/DataStructure/Storage/Memory.cu
     src/FEM/Element/EvaluationError.cu src/FEM/Element/Geometry.cu src/FEM/Element/Quadrature.cu src/FEM/Element/Integration.cu
     src/Simulation/Thermal/ElementOperations.cu src/Simulation/Case/Conditions.cu src/Simulation/Case/Preparation.cu src/Simulation/Thermal/GpuElementOperations.cu src/Simulation/Case/GpuPreparation.cu)
 add_library(EmberField::emberfield ALIAS emberfield)
+target_sources(emberfield PRIVATE src/DataStructure/Field/Snapshot.cu src/IO/Result/Vtu.cu src/IO/Result/Pvd.cu)
+target_sources(emberfield PRIVATE src/IO/Case/Write.cu src/Simulation/Thermal/PostprocessOperations.cu)
+target_sources(emberfield PRIVATE src/Simulation/Case/Postprocess.cu)
+target_sources(emberfield PRIVATE src/Simulation/Case/OutputOptions.cu)
+target_sources(emberfield PRIVATE src/IO/Case/CommandLine.cu src/IO/Result/Archive.cu src/Simulation/Case/Run.cu)
 target_sources(emberfield PRIVATE src/FEM/Assembly/Plan.cu src/FEM/Assembly/Operations.cu src/Numerics/LinearSystem/Operations.cu src/Simulation/Case/Assembly.cu src/Simulation/Case/System.cu)
 target_include_directories(emberfield SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/picojson")
 target_include_directories(emberfield PUBLIC
@@ -40,6 +45,7 @@ endforeach()
 set_target_properties(emberfield PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_executable(emberfield_cli src/main.cu)
+target_include_directories(emberfield_cli SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/CLI11")
 target_link_libraries(emberfield_cli PRIVATE EmberField::emberfield)
 set_target_properties(emberfield_cli PROPERTIES OUTPUT_NAME emberfield)
 
@@ -79,6 +85,8 @@ install(TARGETS emberfield emberfield_cli EXPORT EmberFieldTargets
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.cuh")
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField)
 install(FILES third-party/picojson/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField/picojson)
+install(FILES third-party/CLI11/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField/CLI11)
+install(FILES third-party/CLI11/CLI11.hpp DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party/CLI11)
 install(FILES third-party/picojson/picojson.h DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party/picojson)
 install(FILES third-party/README.md DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party)
 install(EXPORT EmberFieldTargets NAMESPACE EmberField:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/EmberField)

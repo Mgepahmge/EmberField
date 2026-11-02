@@ -1,0 +1,712 @@
+/** @file Postprocess.cu
+ * @brief 复用有限元几何建立身份映射、AABB定位以及GPU物理场和离散热量诊断。
+ */
+#define PICOJSON_USE_INT64
+#include <Numerics/LinearAlgebra/Operations.cuh>
+#include <Simulation/Case/Postprocess.cuh>
+#include <Simulation/Case/Region.cuh>
+#include <Simulation/Case/System.cuh>
+#include <Simulation/Thermal/PostprocessOperations.cuh>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <numeric>
+#include <picojson.h>
+namespace emberfield::problem {
+    namespace {
+        using J = picojson::value;
+        using O = picojson::object;
+        using A = picojson::array;
+        using Point = std::array<double, 3>;
+        /** @brief 受检预算乘法。@param a 数量。@param b 大小。@pre 无。@return 字节；超限length_error。@code auto
+         * n=bytes(c,64); @endcode */
+        std::size_t bytes(std::size_t a, std::size_t b) {
+            if (b && a > SIZE_MAX / b) {
+                throw std::length_error("后处理预算溢出");
+            }
+            return a * b;
+        }
+        /** @brief 三维平方距离。@param a 点。@param b 点。@pre 有限。@return 平方距离。@code auto d=distance(a,b);
+         * @endcode */
+        double distance(const Point& a, const Point& b) {
+            double s = 0;
+            for (int k = 0; k < 3; ++k) {
+                s += (a[k] - b[k]) * (a[k] - b[k]);
+            }
+            return s;
+        }
+        /** @brief 单纯形闭包最近点：枚举非空面，在面仿射空间投影并检查重心系数。
+         * @param vertices 有序顶点。@param p 查询。@pre 非退化三角形或四面体。
+         * @return 非负重心权重；枚举最多15个面。@code auto w=closest(v,p); @endcode */
+        std::array<double, 4> closest(std::span<const Point> vertices, const Point& p) {
+            std::array<double, 4> best{};
+            double bestDistance = INFINITY;
+            for (unsigned mask = 1; mask < (1u << vertices.size()); ++mask) {
+                std::array<unsigned, 4> ids{};
+                unsigned count = 0;
+                for (unsigned i = 0; i < vertices.size(); ++i) {
+                    if (mask & (1u << i)) {
+                        ids[count++] = i;
+                    }
+                }
+                double matrix[3][4]{};
+                const auto& origin = vertices[ids[0]];
+                const auto n = count - 1;
+                for (unsigned i = 0; i < n; ++i) {
+                    for (unsigned j = 0; j < n; ++j) {
+                        for (int k = 0; k < 3; ++k) {
+                            matrix[i][j] +=
+                                (vertices[ids[i + 1]][k] - origin[k]) * (vertices[ids[j + 1]][k] - origin[k]);
+                        }
+                    }
+                    for (int k = 0; k < 3; ++k) {
+                        matrix[i][n] += (vertices[ids[i + 1]][k] - origin[k]) * (p[k] - origin[k]);
+                    }
+                }
+                bool valid = true;
+                for (unsigned k = 0; k < n; ++k) {
+                    unsigned pivot = k;
+                    for (unsigned j = k + 1; j < n; ++j) {
+                        if (std::abs(matrix[j][k]) > std::abs(matrix[pivot][k])) {
+                            pivot = j;
+                        }
+                    }
+                    if (matrix[pivot][k] == 0) {
+                        valid = false;
+                        break;
+                    }
+                    for (unsigned j = k; j <= n; ++j) {
+                        std::swap(matrix[k][j], matrix[pivot][j]);
+                    }
+                    double divisor = matrix[k][k];
+                    for (unsigned j = k; j <= n; ++j) {
+                        matrix[k][j] /= divisor;
+                    }
+                    for (unsigned i = 0; i < n; ++i) {
+                        if (i != k) {
+                            const double factor = matrix[i][k];
+                            for (unsigned j = k; j <= n; ++j) {
+                                matrix[i][j] -= factor * matrix[k][j];
+                            }
+                        }
+                    }
+                }
+                if (!valid) {
+                    continue;
+                }
+                std::array<double, 4> w{};
+                w[ids[0]] = 1;
+                for (unsigned i = 0; i < n; ++i) {
+                    w[ids[i + 1]] = matrix[i][n];
+                    w[ids[0]] -= matrix[i][n];
+                }
+                for (double x : w) {
+                    if (x < 0 || !std::isfinite(x)) {
+                        valid = false;
+                    }
+                }
+                if (!valid) {
+                    continue;
+                }
+                Point q{};
+                for (unsigned a = 0; a < vertices.size(); ++a) {
+                    for (int k = 0; k < 3; ++k) {
+                        q[k] += w[a] * vertices[a][k];
+                    }
+                }
+                const double d = distance(p, q);
+                if (d < bestDistance) {
+                    bestDistance = d;
+                    best = w;
+                }
+            }
+            return best;
+        }
+        /** @brief AABB节点；内部组件不公开为通用模块。@code Box b; @endcode */
+        struct Box {
+            Point low_{}, high_{};
+            std::size_t first_{}, end_{}, left_{SIZE_MAX}, right_{SIZE_MAX};
+        }; // ///< 包围盒、行段和子节点。
+        /** @brief 已定位的监测，不在每步搜索。@code Resolved r; @endcode */
+        struct Resolved {
+            std::vector<std::size_t> rows_; ///< 区域活动行。
+            std::vector<std::uint64_t> dofs_; ///< 插值DOF。
+            std::vector<double> weights_; ///< 插值权重。
+            J dictionary_; ///< 有效定位JSON。
+        };
+    } // namespace
+    struct ThermalPostprocessPlan::Impl {
+        std::shared_ptr<const PreparedThermalCase> prepared_; ///< 同源准备。
+        std::shared_ptr<const field::VisualizationGrid> grid_; ///< 静态可视化网格。
+        std::vector<thermal::P1CellSample> cells_; ///< 单元GPU批上传源。
+        std::vector<thermal::BoundaryPowerSample> boundary_; ///< 已积分自然功率项。
+        std::vector<std::size_t> boundaryDefinitions_; ///< 功率项定义行。
+        std::vector<Resolved> monitors_; ///< 静态定位。
+        std::vector<std::size_t> order_; ///< AABB叶子行顺序。
+        std::vector<Box> boxes_; ///< AABB树。
+        double sourcePower_{}; ///< 体源积分总功率。
+        /** @brief 建立平衡AABB树。@param first 起始叶。@param end 结束叶。@pre 非空段。@return 树节点。@code auto
+         * root=tree(0,n); @endcode */
+        std::size_t tree(std::size_t first, std::size_t end) {
+            Box b;
+            b.first_ = first;
+            b.end_ = end;
+            b.low_.fill(INFINITY);
+            b.high_.fill(-INFINITY);
+            for (auto i = first; i < end; ++i) {
+                for (const auto& p : prepared_->geometry()->cells()[order_[i]].vertices()) {
+                    for (int k = 0; k < 3; ++k) {
+                        b.low_[k] = std::min(b.low_[k], p[k]);
+                        b.high_[k] = std::max(b.high_[k], p[k]);
+                    }
+                }
+            }
+            const auto index = boxes_.size();
+            boxes_.push_back(b);
+            if (end - first > 8) {
+                int axis = 0;
+                for (int k = 1; k < 3; ++k) {
+                    if (b.high_[k] - b.low_[k] > b.high_[axis] - b.low_[axis]) {
+                        axis = k;
+                    }
+                }
+                const auto middle = first + (end - first) / 2;
+                std::nth_element(order_.begin() + first, order_.begin() + middle, order_.begin() + end,
+                                 [&](auto a, auto c) {
+                                     const auto& va = prepared_->geometry()->cells()[a].vertices();
+                                     const auto& vc = prepared_->geometry()->cells()[c].vertices();
+                                     double sa = 0, sc = 0;
+                                     for (auto p : va) {
+                                         sa += p[axis];
+                                     }
+                                     for (auto p : vc) {
+                                         sc += p[axis];
+                                     }
+                                     return sa < sc || (sa == sc && a < c);
+                                 });
+                const auto left = tree(first, middle);
+                const auto right = tree(middle, end);
+                boxes_[index].left_ = left;
+                boxes_[index].right_ = right;
+            }
+            return index;
+        }
+        /** @brief 查询容差内单元，按最小行选择，防止材料界面歧义。@param index 子树。@param p 点。
+         * @param tolerance 米制容差。@param row 最佳行。@param weights 重心系数。@pre 已建树。
+         * @note 无返回值。@code locate(0,p,tol,row,w); @endcode */
+        void locate(std::size_t index, const Point& p, double tolerance, std::size_t& row,
+                    std::array<double, 4>& weights) const {
+            const auto& b = boxes_[index];
+            for (int k = 0; k < 3; ++k) {
+                if (p[k] < b.low_[k] - tolerance || p[k] > b.high_[k] + tolerance) {
+                    return;
+                }
+            }
+            if (b.left_ != SIZE_MAX) {
+                locate(b.left_, p, tolerance, row, weights);
+                locate(b.right_, p, tolerance, row, weights);
+                return;
+            }
+            for (auto i = b.first_; i < b.end_; ++i) {
+                const auto r = order_[i];
+                if (r >= row) {
+                    continue;
+                }
+                const auto& v = prepared_->geometry()->cells()[r].vertices();
+                auto w = closest(v, p);
+                Point q{};
+                for (std::size_t a = 0; a < v.size(); ++a) {
+                    for (int k = 0; k < 3; ++k) {
+                        q[k] += w[a] * v[a][k];
+                    }
+                }
+                if (std::sqrt(distance(q, p)) <= tolerance) {
+                    row = r;
+                    weights = w;
+                }
+            }
+        }
+    };
+    ThermalPostprocessPlan::ThermalPostprocessPlan(std::shared_ptr<const PreparedThermalCase> prepared) :
+        impl_(std::make_unique<Impl>()) {
+        if (!prepared) {
+            throw std::invalid_argument("后处理准备对象为空");
+        }
+        auto& s = *impl_;
+        s.prepared_ = std::move(prepared);
+        const auto& p = *s.prepared_;
+        const auto& space = *p.space();
+        const auto& d = p.bound()->data();
+        const auto& def = d.definition_;
+        const auto& m = d.mesh_->data();
+        const auto& limits = def.output_.limits_;
+        const auto count = space.cells().size(), points = space.dofCount();
+        if (count > limits.maxCells_ || points > limits.maxPoints_ || bytes(count, 1400) > limits.maxHostBytes_ ||
+            bytes(points, 192) > limits.maxHostBytes_ - bytes(count, 1400)) {
+            throw std::length_error("后处理主机预算不足");
+        }
+        const auto batch = std::min(count, limits.batchCells_);
+        const auto nnz = bytes(count, 16); // P1局部条目上界，仅预算估计，不创建矩阵。
+        if (bytes(batch, 1024) > limits.maxDeviceBytes_ ||
+            bytes(points, 128) > limits.maxDeviceBytes_ - bytes(batch, 1024) ||
+            bytes(nnz, 64) > limits.maxDeviceBytes_ - bytes(batch, 1024) - bytes(points, 128)) {
+            throw std::length_error("后处理设备预算不足");
+        }
+        const auto membership = buildPhysicalMembership(*d.mesh_, std::max<std::size_t>(1, limits.maxHostBytes_ / 256));
+        std::vector<Point> xyz(points);
+        std::vector<std::uint64_t> tags(points), dofs(points), offsets{0}, connectivity, cellTags, cellRows, materials,
+            groupOffsets{0};
+        std::vector<std::uint8_t> hasEntity, entityDimensions, groupDimensions;
+        std::vector<std::int64_t> entities, groupTags;
+        std::vector<mesh::ElementType> layouts;
+        for (std::size_t i = 0; i < points; ++i) {
+            const auto node = *space.dofInfo(i).node_;
+            xyz[i] = p.bound()->position(node);
+            if (space.dimension() == 2) {
+                xyz[i][2] = 0;
+            }
+            tags[i] = m.nodes_[node].tag_;
+            dofs[i] = i;
+        }
+        std::map<mesh::CellRef, std::vector<GroupKey>> groups;
+        for (const auto& [key, members] : membership.members_) {
+            for (auto ref : members) {
+                groups[ref].push_back(key);
+            }
+        }
+        const double scale = def.analysis_.thickness_.value_or(1);
+        s.cells_.reserve(count);
+        for (std::size_t row = 0; row < count; ++row) {
+            const auto ref = space.cells()[row];
+            const auto& block = m.elements_[ref.block_];
+            const auto indices = space.cellDofs(row);
+            const auto& geometry = p.geometry()->cells()[row];
+            auto table = fem::evaluateCellIntegration(p.geometry(), row, 1);
+            thermal::P1CellSample sample{};
+            sample.dimension_ = space.dimension();
+            sample.volume_ = geometry.measure() * scale;
+            for (std::size_t a = 0; a < indices.size(); ++a) {
+                sample.dofs_[a] = indices[a];
+                connectivity.push_back(indices[a]);
+                for (unsigned k = 0; k < sample.dimension_; ++k) {
+                    sample.gradients_[a * 3 + k] = table.gradients()[a * sample.dimension_ + k];
+                }
+            }
+            const auto material = p.conditions()->materialIndices()[row];
+            const auto& mat = def.materials_[material];
+            sample.conductivity_ = problem::evaluate(mat.conductivity_);
+            if (def.time_) {
+                sample.capacity_ = mat.volumetricHeatCapacity_
+                    ? problem::evaluate(*mat.volumetricHeatCapacity_)
+                    : problem::evaluate(*mat.density_) * problem::evaluate(*mat.specificHeat_);
+            }
+            for (auto j = p.conditions()->sourceOffsets()[row]; j < p.conditions()->sourceOffsets()[row + 1]; ++j) {
+                sample.source_ += problem::evaluate(def.sources_[p.conditions()->sourceIndices()[j]].value_);
+            }
+            s.sourcePower_ += sample.source_ * sample.volume_;
+            s.cells_.push_back(sample);
+            offsets.push_back(connectivity.size());
+            layouts.push_back(block.type_);
+            cellTags.push_back(block.tags_[ref.element_]);
+            cellRows.push_back(row);
+            materials.push_back(material);
+            hasEntity.push_back(block.classification_.has_value());
+            entityDimensions.push_back(block.classification_ ? block.classification_->dimension_ : 0);
+            entities.push_back(block.classification_ ? block.classification_->tag_ : 0);
+            for (const auto& key : groups[ref]) {
+                groupDimensions.push_back(key.first);
+                groupTags.push_back(key.second);
+            }
+            groupOffsets.push_back(groupTags.size());
+        }
+        using field::NumericArray;
+        std::vector<NumericArray> pi, ci, metadata;
+        pi.push_back({"sourceNodeTag", 1, points, "1", std::move(tags)});
+        pi.push_back({"dofIndex", 1, points, "1", std::move(dofs)});
+        ci.push_back({"sourceCellTag", 1, count, "1", std::move(cellTags)});
+        ci.push_back({"sourceCellRow", 1, count, "1", std::move(cellRows)});
+        ci.push_back({"materialIndex", 1, count, "1", std::move(materials)});
+        ci.push_back({"hasEntity", 1, count, "1", std::move(hasEntity)});
+        ci.push_back({"entityDimension", 1, count, "1", std::move(entityDimensions)});
+        ci.push_back({"entityTag", 1, count, "1", std::move(entities)});
+        metadata.push_back({"emberfieldSchemaVersion", 1, 1, "1", std::vector<std::uint32_t>{1}});
+        metadata.push_back(
+            {"dimension", 1, 1, "1", std::vector<std::uint8_t>{static_cast<std::uint8_t>(space.dimension())}});
+        metadata.push_back({"coordinateScale", 1, 1, "1", std::vector<double>{def.mesh_.coordinateScale_}});
+        if (space.dimension() == 2) {
+            metadata.push_back({"thickness", 1, 1, "m", std::vector<double>{scale}});
+        }
+        metadata.push_back({"physicalGroupOffsets", 1, groupOffsets.size(), "1", std::move(groupOffsets)});
+        metadata.push_back({"physicalGroupDimensions", 1, groupDimensions.size(), "1", std::move(groupDimensions)});
+        metadata.push_back({"physicalGroupTags", 1, groupTags.size(), "1", std::move(groupTags)});
+        s.grid_ = std::make_shared<const field::VisualizationGrid>(std::move(xyz), std::move(offsets),
+                                                                   std::move(connectivity), std::move(layouts),
+                                                                   std::move(pi), std::move(ci), std::move(metadata));
+        for (const auto& term : p.conditions()->naturalTerms()) {
+            const auto table = fem::evaluateFacetIntegration(p.geometry(), term.facetIndex(), 2);
+            thermal::BoundaryPowerSample sample{};
+            sample.count_ = term.globalDofs().size();
+            for (unsigned a = 0; a < sample.count_; ++a) {
+                sample.dofs_[a] = term.globalDofs()[a];
+            }
+            const auto& value = def.boundaries_[term.definitionIndex()].value_;
+            for (std::size_t q = 0; q < table.pointCount(); ++q) {
+                const double w = table.physicalWeights()[q] * scale;
+                if (const auto* f = std::get_if<FluxBoundary>(&value)) {
+                    sample.constant_ += w * problem::evaluate(f->flux_);
+                }
+                else {
+                    const auto& h = std::get<ConvectionBoundary>(value);
+                    const double hValue = problem::evaluate(h.coefficient_);
+                    sample.constant_ -= w * hValue * problem::evaluate(h.ambientTemperature_);
+                    for (unsigned a = 0; a < sample.count_; ++a) {
+                        sample.weights_[a] += w * hValue * table.traceValues()[q * sample.count_ + a];
+                    }
+                }
+            }
+            s.boundary_.push_back(sample);
+            s.boundaryDefinitions_.push_back(term.definitionIndex());
+        }
+        if (std::any_of(def.output_.monitors_.begin(), def.output_.monitors_.end(),
+                        [](const MonitorDefinition& x) { return std::holds_alternative<PointMonitor>(x.value_); })) {
+            s.order_.resize(count);
+            std::iota(s.order_.begin(), s.order_.end(), 0);
+            s.boxes_.reserve(count * 2);
+            s.tree(0, count);
+        }
+        std::size_t monitorBytes = 0;
+        for (const auto& monitor : def.output_.monitors_) {
+            Resolved r;
+            O dictionary{{"id", J(monitor.id_)}};
+            if (const auto* n = std::get_if<NodeMonitor>(&monitor.value_)) {
+                std::optional<std::uint64_t> found;
+                for (std::size_t i = 0; i < points; ++i) {
+                    if (m.nodes_[*space.dofInfo(i).node_].tag_ == n->nodeTag_) {
+                        found = i;
+                        break;
+                    }
+                }
+                if (!found) {
+                    throw std::invalid_argument("监测节点不在活动域: " + monitor.id_);
+                }
+                r.dofs_ = {*found};
+                r.weights_ = {1};
+                dictionary["kind"] = J("node");
+                dictionary["resolved"] =
+                    J(O{{"nodeTag", J(std::to_string(n->nodeTag_))}, {"dofIndex", J(std::to_string(*found))}});
+            }
+            else if (const auto* point = std::get_if<PointMonitor>(&monitor.value_)) {
+                std::size_t row = SIZE_MAX;
+                std::array<double, 4> weights{};
+                const double effectiveTolerance = point->toleranceM_ +
+                    64 * std::numeric_limits<double>::epsilon() *
+                        std::max({1., std::abs(point->positionM_[0]), std::abs(point->positionM_[1]),
+                                  std::abs(point->positionM_[2])});
+                if (!std::isfinite(effectiveTolerance)) {
+                    throw std::invalid_argument("定位有效容差溢出");
+                }
+                s.locate(0, point->positionM_, effectiveTolerance, row, weights);
+                if (row == SIZE_MAX) {
+                    throw std::invalid_argument("监测点不在活动域闭包内: " + monitor.id_);
+                }
+                const auto indices = space.cellDofs(row);
+                r.dofs_.assign(indices.begin(), indices.end());
+                r.weights_.assign(weights.begin(), weights.begin() + indices.size());
+                Point actual{};
+                const auto& v = p.geometry()->cells()[row].vertices();
+                for (std::size_t a = 0; a < v.size(); ++a) {
+                    for (int k = 0; k < 3; ++k) {
+                        actual[k] += weights[a] * v[a][k];
+                    }
+                }
+                A bary, position;
+                for (double x : r.weights_) {
+                    bary.emplace_back(x);
+                }
+                for (double x : actual) {
+                    position.emplace_back(x);
+                }
+                dictionary["kind"] = J("point");
+                dictionary["resolved"] = J(O{{"cellRow", J(std::to_string(row))},
+                                             {"barycentric", J(bary)},
+                                             {"samplePositionM", J(position)},
+                                             {"effectiveToleranceM", J(effectiveTolerance)}});
+            }
+            else {
+                const auto& region = std::get<RegionMonitor>(monitor.value_);
+                auto selected = resolveRegion(region.region_, membership);
+                if (selected.diagnostics_.hasErrors()) {
+                    throw std::invalid_argument("区域监测选择失败: " + monitor.id_);
+                }
+                double volume = 0;
+                for (std::size_t row = 0; row < count; ++row) {
+                    if (std::binary_search(selected.cells_.begin(), selected.cells_.end(), space.cells()[row])) {
+                        r.rows_.push_back(row);
+                        volume += s.cells_[row].volume_;
+                    }
+                }
+                if (r.rows_.empty()) {
+                    throw std::invalid_argument("区域监测活动交集为空: " + monitor.id_);
+                }
+                dictionary["kind"] = J("region");
+                dictionary["resolved"] =
+                    J(O{{"cellCount", J(std::to_string(r.rows_.size()))}, {"volumeM3", J(volume)}});
+            }
+            const auto additional = bytes(r.rows_.size() + r.dofs_.size() + r.weights_.size() + 64, 32);
+            const auto base = bytes(count, 1400) + bytes(points, 192);
+            if (additional > limits.maxHostBytes_ - base - monitorBytes) {
+                throw std::length_error("监测定位缓存超出主机预算");
+            }
+            monitorBytes += additional;
+            r.dictionary_ = J(dictionary);
+            s.monitors_.push_back(std::move(r));
+        }
+    }
+    ThermalPostprocessPlan::~ThermalPostprocessPlan() noexcept = default;
+    ThermalPostprocessPlan::ThermalPostprocessPlan(ThermalPostprocessPlan&&) noexcept = default;
+    ThermalPostprocessPlan& ThermalPostprocessPlan::operator=(ThermalPostprocessPlan&&) noexcept = default;
+    const std::shared_ptr<const field::VisualizationGrid>& ThermalPostprocessPlan::grid() const noexcept {
+        return impl_->grid_;
+    }
+    std::string ThermalPostprocessPlan::monitorDictionary() const {
+        A a;
+        for (const auto& r : impl_->monitors_) {
+            a.push_back(r.dictionary_);
+        }
+        return J(a).serialize();
+    }
+    field::FieldSnapshot ThermalPostprocessPlan::evaluateThermalFields(const Vector<double>& temperature,
+                                                                       std::uint64_t step, std::optional<double> time,
+                                                                       bool initial) {
+        auto& s = *impl_;
+        const auto& def = s.prepared_->bound()->data().definition_;
+        const auto& output = def.output_;
+        systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
+                                          s.prepared_->conditions()->constraints().temperatures());
+        const auto n = s.cells_.size();
+        if (temperature.size() != s.grid_->pointCount() || def.time_.has_value() != time.has_value() ||
+            (time && !std::isfinite(*time)) || (initial && (!def.time_ || step != 0))) {
+            throw std::invalid_argument("结果场身份或维度不符");
+        }
+        std::vector<double> host(temperature.size());
+        temperature.copyToHost(host);
+        std::vector<thermal::P1CellValue> values(output.fields_.size() > 1 ? n : 0);
+        for (std::size_t first = 0; output.fields_.size() > 1 && first < n;) {
+            const auto count = std::min(output.limits_.batchCells_, n - first);
+            auto batch = thermal::evaluateP1Gradient(std::span(s.cells_).subspan(first, count), temperature);
+            std::vector<Point> g(count);
+            std::vector<double> k(count);
+            for (std::size_t i = 0; i < count; ++i) {
+                std::copy_n(batch[i].gradient_, 3, g[i].begin());
+                k[i] = s.cells_[first + i].conductivity_;
+            }
+            auto q = thermal::applyFourierLaw(g, k);
+            for (std::size_t i = 0; i < count; ++i) {
+                std::copy_n(q[i].begin(), 3, batch[i].flux_);
+                values[first + i] = batch[i];
+            }
+            first += count;
+        }
+        std::vector<field::NumericArray> pointFields{{"temperature", 1, host.size(), "K", std::move(host)}}, cellFields;
+        for (const auto field : output.fields_) {
+            const auto f = std::string(outputFieldName(field));
+            if (f != "temperature") {
+                std::vector<double> v;
+                v.reserve(n * 3);
+                for (const auto& x : values) {
+                    const auto* a = f == "heatFlux" ? x.flux_ : x.gradient_;
+                    v.insert(v.end(), a, a + 3);
+                }
+                cellFields.push_back({f, 3, n, f == "heatFlux" ? "W/m^2" : "K/m", std::move(v)});
+            }
+        }
+        return field::FieldSnapshot(s.grid_, step, time,
+                                    initial ? field::SampleKind::Initial : field::SampleKind::Accepted,
+                                    std::move(pointFields), std::move(cellFields));
+    }
+    std::vector<MonitorValue> ThermalPostprocessPlan::evaluateMonitors(const Vector<double>& temperature) {
+        auto& s = *impl_;
+        const auto& def = s.prepared_->bound()->data().definition_;
+        const auto& output = def.output_;
+        systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
+                                          s.prepared_->conditions()->constraints().temperatures());
+        if (temperature.size() != s.grid_->pointCount()) {
+            throw std::invalid_argument("监测温度维度不符");
+        }
+        std::vector<MonitorValue> result;
+        std::vector<thermal::TemperatureSample> samples;
+        for (const auto& r : s.monitors_) {
+            if (!r.dofs_.empty()) {
+                thermal::TemperatureSample sample{};
+                sample.count_ = r.dofs_.size();
+                for (unsigned a = 0; a < sample.count_; ++a) {
+                    sample.dofs_[a] = r.dofs_[a];
+                    sample.weights_[a] = r.weights_[a];
+                }
+                samples.push_back(sample);
+            }
+        }
+        auto temperatures = thermal::interpolateTemperature(samples, temperature);
+        std::size_t sampleIndex = 0;
+        for (std::size_t i = 0; i < output.monitors_.size(); ++i) {
+            const auto& monitor = output.monitors_[i];
+            const auto& r = s.monitors_[i];
+            if (!r.dofs_.empty()) {
+                double t = temperatures[sampleIndex++];
+                result.push_back({monitor.id_, std::holds_alternative<NodeMonitor>(monitor.value_) ? "node" : "point",
+                                  "temperature", "K", t});
+            }
+            else {
+                const auto& region = std::get<RegionMonitor>(monitor.value_);
+                double min = INFINITY, max = -INFINITY, integral = 0, energy = 0, volume = 0;
+                for (std::size_t first = 0; first < r.rows_.size();) {
+                    const auto count = std::min(output.limits_.batchCells_, r.rows_.size() - first);
+                    std::vector<thermal::P1CellSample> selectedCells(count);
+                    std::vector<double> volumes(count);
+                    for (std::size_t j = 0; j < count; ++j) {
+                        const auto row = r.rows_[first + j];
+                        selectedCells[j] = s.cells_[row];
+                        volumes[j] = s.cells_[row].volume_;
+                    }
+                    const auto selected = thermal::evaluateP1Gradient(selectedCells, temperature);
+                    const auto batch = thermal::reduceRegion(selected, volumes);
+                    min = std::min(min, batch.minimum_);
+                    max = std::max(max, batch.maximum_);
+                    integral += batch.integral_;
+                    energy += batch.energy_;
+                    volume += batch.volume_;
+                    first += count;
+                }
+                for (const auto statistic : region.statistics_) {
+                    const auto f = std::string(regionStatisticName(statistic));
+                    result.push_back({monitor.id_, "region", f, f == "storedEnergy" ? "J" : "K",
+                                      f == "temperatureMin"        ? min
+                                          : f == "temperatureMax"  ? max
+                                          : f == "temperatureMean" ? integral / volume
+                                                                   : energy});
+                }
+            }
+        }
+        for (const auto& r : result) {
+            if (!std::isfinite(r.value_)) {
+                throw std::overflow_error("监测结果非有限");
+            }
+        }
+        return result;
+    }
+    HeatBalanceReport ThermalPostprocessPlan::evaluateHeatBalance(const AssembledThermalModel& model,
+                                                                  const Vector<double>& temperature,
+                                                                  const Vector<double>* previous,
+                                                                  std::optional<double> dt, bool initial) {
+        auto& s = *impl_;
+        const auto& def = s.prepared_->bound()->data().definition_;
+        const auto& output = def.output_;
+        systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
+                                          s.prepared_->conditions()->constraints().temperatures());
+        if (temperature.size() != s.grid_->pointCount() || (previous && previous->size() != temperature.size()) ||
+            model.plan()->prepared().get() != s.prepared_.get() ||
+            (def.time_ && !initial && (!previous || !dt || !std::isfinite(*dt) || *dt <= 0)) ||
+            ((!def.time_ || initial) && (previous || dt))) {
+            throw std::invalid_argument("热平衡模型或前态不相容");
+        }
+        if (previous) {
+            systems::validateTemperatureState(*previous, s.prepared_->conditions()->constraints().dofs(),
+                                              s.prepared_->conditions()->constraints().temperatures());
+        }
+        HeatBalanceReport result;
+        if (output.energy_.enabled_) {
+            auto& e = result;
+            e.status_ = "unavailable";
+            if (model.capacity()) {
+                auto energy = linalg::multiply(*model.capacity(), temperature);
+                e.storedEnergyJ_ = thermal::sumValues(energy);
+            }
+            if (!initial) {
+                auto residual = linalg::subtract(linalg::multiply(model.spatial(), temperature), model.load());
+                e.storagePowerW_ = 0;
+                if (previous) {
+                    const auto change = linalg::subtract(temperature, *previous);
+                    const auto power = linalg::multiply(*model.capacity(), change);
+                    e.storagePowerW_ = thermal::sumValues(power) / *dt;
+                    residual = linalg::add(residual, power, 1 / *dt);
+                }
+                const auto& constraints = s.prepared_->conditions()->constraints().dofs();
+                e.dirichletOutW_ = constraints.empty() ? 0 : -thermal::sumValues(residual, constraints);
+                e.sourcePowerW_ = s.sourcePower_;
+                e.prescribedFluxOutW_ = 0;
+                e.convectionOutW_ = 0;
+                std::vector<double> powers(def.boundaries_.size(), 0);
+                for (std::size_t first = 0; first < s.boundary_.size();) {
+                    const auto count = std::min(output.limits_.batchCells_, s.boundary_.size() - first);
+                    auto power =
+                        thermal::integrateBoundaryPowerBatch(std::span(s.boundary_).subspan(first, count), temperature);
+                    for (std::size_t i = 0; i < count; ++i) {
+                        powers[s.boundaryDefinitions_[first + i]] += power[i];
+                    }
+                    first += count;
+                }
+                for (std::size_t i = 0; i < def.boundaries_.size(); ++i) {
+                    const auto& b = def.boundaries_[i];
+                    if (std::holds_alternative<TemperatureBoundary>(b.value_)) {
+                        continue;
+                    }
+                    const bool isFlux = std::holds_alternative<FluxBoundary>(b.value_);
+                    (isFlux ? *e.prescribedFluxOutW_ : *e.convectionOutW_) += powers[i];
+                    e.boundaries_.push_back({b.id_, isFlux ? "flux" : "convection", powers[i]});
+                }
+                e.boundaries_.push_back({"", "temperature", *e.dirichletOutW_});
+                e.errorW_ = *e.storagePowerW_ + *e.prescribedFluxOutW_ + *e.convectionOutW_ + *e.dirichletOutW_ -
+                    *e.sourcePowerW_;
+                e.toleranceW_ = output.energy_.absoluteToleranceW_ +
+                    output.energy_.relativeTolerance_ *
+                        std::max({std::abs(*e.storagePowerW_), std::abs(*e.prescribedFluxOutW_),
+                                  std::abs(*e.convectionOutW_), std::abs(*e.dirichletOutW_),
+                                  std::abs(*e.sourcePowerW_)});
+                if (!std::isfinite(*e.errorW_) || !std::isfinite(*e.toleranceW_)) {
+                    throw std::overflow_error("热量平衡非有限");
+                }
+                e.status_ = std::abs(*e.errorW_) <= *e.toleranceW_ ? "passed" : "warning";
+            }
+        }
+        return result;
+    }
+    ThermalFields ThermalPostprocessPlan::evaluate(const AssembledThermalModel& model,
+                                                   const Vector<double>& temperature, const Vector<double>* previous,
+                                                   std::optional<double> dt, std::uint64_t step,
+                                                   std::optional<double> time, bool initial, bool includeFrame) {
+        auto& s = *impl_;
+        const auto& definition = s.prepared_->bound()->data().definition_;
+        if (temperature.size() != s.grid_->pointCount() || definition.time_.has_value() != time.has_value() ||
+            (time && !std::isfinite(*time)) || (initial && (!definition.time_ || step != 0))) {
+            throw std::invalid_argument("结果场身份或维度不符");
+        }
+        std::optional<field::FieldSnapshot> snapshot;
+        double low = INFINITY, high = -INFINITY;
+        if (includeFrame) {
+            snapshot = evaluateThermalFields(temperature, step, time, initial);
+            const auto& nodal = std::get<std::vector<double>>(snapshot->pointFields()[0].values_);
+            const auto [minimum, maximum] = std::minmax_element(nodal.begin(), nodal.end());
+            low = *minimum;
+            high = *maximum;
+        }
+        else {
+            systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
+                                              s.prepared_->conditions()->constraints().temperatures());
+            for (std::size_t first = 0; first < s.cells_.size();) {
+                const auto count = std::min(definition.output_.limits_.batchCells_, s.cells_.size() - first);
+                const auto values = thermal::evaluateP1Gradient(std::span(s.cells_).subspan(first, count), temperature);
+                std::vector<double> volumes(count);
+                for (std::size_t i = 0; i < count; ++i) {
+                    volumes[i] = s.cells_[first + i].volume_;
+                }
+                const auto statistics = thermal::reduceRegion(values, volumes);
+                low = std::min(low, statistics.minimum_);
+                high = std::max(high, statistics.maximum_);
+                first += count;
+            }
+        }
+        auto monitors = evaluateMonitors(temperature);
+        auto energy = evaluateHeatBalance(model, temperature, previous, dt, initial);
+        return {std::move(snapshot), std::move(energy), std::move(monitors), low, high};
+    }
+} // namespace emberfield::problem

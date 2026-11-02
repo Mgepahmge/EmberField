@@ -111,7 +111,8 @@ namespace emberfield::problem {
         Checker v(limits);
         // 先检查总记录预算，再建立id集合，避免诊断路径触发不受控的二次分配。
         for (auto size : {c.materials_.size(), c.materialAssignments_.size(), c.sources_.size(), c.boundaries_.size(),
-                          c.initialState_ ? c.initialState_->overrides_.size() : std::size_t{0}}) {
+                          c.initialState_ ? c.initialState_->overrides_.size() : std::size_t{0},
+                          c.output_.monitors_.size(), c.output_.fields_.size()}) {
             if (!v.record("/", size)) {
                 return v.report_;
             }
@@ -276,6 +277,76 @@ namespace emberfield::problem {
         }
         if (c.output_.everySteps_ && !*c.output_.everySteps_) {
             v.error("INVALID_VALUE", "/output/schedule/interval", "输出步数间隔必须为正");
+        }
+        const auto& o = c.output_;
+        if (o.encoding_ != OutputEncoding::Ascii && o.encoding_ != OutputEncoding::AppendedRaw) {
+            v.error("INVALID_VALUE", "/output/encoding", "未知编码");
+        }
+        std::unordered_set<std::string> fields;
+        for (const auto field : o.fields_) {
+            std::string f;
+            try {
+                f = outputFieldName(field);
+            }
+            catch (const std::invalid_argument&) {
+                v.error("INVALID_VALUE", "/output/fields", "未知场枚举");
+                continue;
+            }
+            if ((f != "temperature" && f != "temperatureGradient" && f != "heatFlux") || !fields.insert(f).second) {
+                v.error("INVALID_VALUE", "/output/fields", "未知或重复场");
+            }
+        }
+        if (!fields.contains("temperature")) {
+            v.error("INVALID_VALUE", "/output/fields", "必须包含温度");
+        }
+        if (!std::isfinite(o.energy_.absoluteToleranceW_) || o.energy_.absoluteToleranceW_ < 0 ||
+            !std::isfinite(o.energy_.relativeTolerance_) || o.energy_.relativeTolerance_ < 0) {
+            v.error("INVALID_VALUE", "/output/energy", "非法热量容差");
+        }
+        const auto& l = o.limits_;
+        if (!l.maxPoints_ || !l.maxCells_ || !l.maxHostBytes_ || !l.maxDeviceBytes_ || !l.batchCells_ ||
+            !l.maxFrames_ || !l.maxMonitors_ || !l.maxOutputBytes_ || o.monitors_.size() > l.maxMonitors_) {
+            v.error("RESOURCE_LIMIT", "/output/limits", "非法或超出输出预算");
+        }
+        ids.clear();
+        for (const auto& m : o.monitors_) {
+            const std::string p = "/output/monitors";
+            v.id(m.id_, p + "/id", ids);
+            if (const auto* n = std::get_if<NodeMonitor>(&m.value_)) {
+                if (!n->nodeTag_) {
+                    v.error("INVALID_VALUE", p, "节点标签必须为正");
+                }
+            }
+            else if (const auto* q = std::get_if<PointMonitor>(&m.value_)) {
+                if (!std::all_of(q->positionM_.begin(), q->positionM_.end(),
+                                 [](double x) { return std::isfinite(x); }) ||
+                    !std::isfinite(q->toleranceM_) || q->toleranceM_ < 0) {
+                    v.error("INVALID_VALUE", p, "非法监测坐标或容差");
+                }
+            }
+            else {
+                const auto& r = std::get<RegionMonitor>(m.value_);
+                v.selector(r.region_, p + "/region", dimension);
+                fields.clear();
+                if (r.statistics_.empty()) {
+                    v.error("INVALID_VALUE", p, "统计量不能为空");
+                }
+                for (const auto statistic : r.statistics_) {
+                    std::string f;
+                    try {
+                        f = regionStatisticName(statistic);
+                    }
+                    catch (const std::invalid_argument&) {
+                        v.error("INVALID_VALUE", p, "未知统计枚举");
+                        continue;
+                    }
+                    if ((f != "temperatureMin" && f != "temperatureMax" && f != "temperatureMean" &&
+                         f != "storedEnergy") ||
+                        !fields.insert(f).second || (!transient && f == "storedEnergy")) {
+                        v.error("INVALID_VALUE", p, "未知、重复或不适用的统计量");
+                    }
+                }
+            }
         }
         return v.report_;
     }

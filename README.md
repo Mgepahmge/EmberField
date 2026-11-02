@@ -39,6 +39,7 @@ EmberField/
 | Doxygen | 推荐 **1.9.1 或更新版本** | 仅自行生成文档时需要 | 项目未强制最低版本；不需要 Graphviz 或 LaTeX |
 | Bash | 可执行项目中的 Bash 脚本 | 使用文档构建脚本时需要 | 也可通过 CMake 的 `docs` 目标生成文档 |
 | picojson | 使用源码内附版本 | JSON 解析；位于 `third-party/picojson/` | 随项目发布，无需另行安装 |
+| CLI11 | **2.6.1**，源码内附 | 命令行解析；位于 `third-party/CLI11/` | 随项目发布，无需另行安装 |
 
 ## 构建与运行
 
@@ -47,7 +48,7 @@ EmberField/
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
-./build/emberfield
+./build/emberfield example/cases/steady.json
 ctest --test-dir build --output-on-failure
 ```
 
@@ -66,7 +67,7 @@ cmake -S . -B build \
   -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/path/to/googletest
 ```
 
-`emberfield` 当前输出库版本；完整算例的运行方法与示例见用户文档。
+`emberfield <算例.json> [--output-root 路径] [--output 目录名]` 加载算例、求解并生成结果文件夹。`output-root` 默认是可执行文件所在目录，`output` 默认是算例配置文件名去掉扩展名；两者组合为最终输出目录，覆盖配置中的 `output.directory`。完整配置及输出字段见用户文档。
 
 ## 安装
 

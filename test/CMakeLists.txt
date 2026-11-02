@@ -12,6 +12,12 @@ endif()
 
 add_executable(emberfield_tests version_test.cpp DataStructure/Storage/data_structure_test.cpp Numerics/LinearAlgebra/linear_algebra_test.cpp Solver/Iterative/solver_test.cpp Solver/Iterative/cg_test.cpp IO/Matrix/matrix_market_test.cpp DataStructure/Mesh/mesh_test.cpp IO/Mesh/msh_test.cpp Simulation/Case/case_test.cpp IO/Case/case_io_test.cpp)
 target_link_libraries(emberfield_tests PRIVATE EmberField::emberfield GTest::gtest_main)
+target_sources(emberfield_tests PRIVATE IO/Result/result_test.cpp)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME cli-result-contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/IO/Result/validate_cli.py"
+        "$<TARGET_FILE:emberfield_cli>" "${PROJECT_SOURCE_DIR}/example/cases")
+endif()
 target_include_directories(emberfield_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources(emberfield_tests PRIVATE FEM/Element/reference_element_test.cpp FEM/Space/finite_element_space_test.cpp Simulation/Case/temperature_space_test.cpp FEM/Element/geometry_integration_test.cpp Simulation/Thermal/thermal_element_test.cpp Simulation/Case/condition_preparation_test.cpp Simulation/Thermal/gpu_thermal_test.cpp Simulation/Case/gpu_preparation_test.cpp)
 include(GoogleTest)

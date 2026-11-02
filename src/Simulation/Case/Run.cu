@@ -1,0 +1,282 @@
+/** @file Run.cu @brief 正式稳态/瞬态运行编排，不在求解器内部执行文件操作。 */
+#include <IO/Case/Case.cuh>
+#include <IO/Mesh/Msh.cuh>
+#include <IO/Result/Archive.cuh>
+#include <Numerics/LinearAlgebra/IterationContext.cuh>
+#include <Simulation/Case/Run.cuh>
+#include <Simulation/Case/System.cuh>
+#include <Solver/Iterative/BiCgStab.cuh>
+#include <Solver/Iterative/Cg.cuh>
+#include <chrono>
+#include <iostream>
+namespace emberfield::problem {
+    namespace {
+        using Clock = std::chrono::steady_clock;
+        /** @brief 完成阶段墙钟秒数。@param start 起点。@pre 单调时钟。@return 秒数。@code auto t=elapsed(start);
+         * @endcode */
+        double elapsed(Clock::time_point start) { return std::chrono::duration<double>(Clock::now() - start).count(); }
+        /** @brief 输出输入诊断。@param d 诊断。@pre 无。@note 无返回值。@code diagnostics(d); @endcode */
+        void diagnostics(const Diagnostics& d) {
+            for (const auto& x : d.entries()) {
+                std::cerr << x.code_ << ": " << x.message_ << '\n';
+            }
+        }
+        /** @brief 创建运行时求解器。@param o 已验证配置。@pre 迭代数可表示int。@return 独占求解器。@code auto
+         * s=solver(o); @endcode */
+        std::unique_ptr<Solver<double, assembly::Index>> solver(const LinearOptions& o) {
+            if (o.maxIterations_ > INT_MAX) {
+                throw std::length_error("迭代上限超出int");
+            }
+            if (o.method_ == LinearMethod::Cg) {
+                CgOptions<double> p;
+                p.maxIterations_ = static_cast<int>(o.maxIterations_);
+                p.relativeTolerance_ = o.relativeTolerance_;
+                p.absoluteTolerance_ = o.absoluteTolerance_;
+                return std::make_unique<Cg<double, assembly::Index>>(p);
+            }
+            BiCgStabOptions<double> p;
+            p.maxIterations_ = static_cast<int>(o.maxIterations_);
+            p.relativeTolerance_ = o.relativeTolerance_;
+            p.absoluteTolerance_ = o.absoluteTolerance_;
+            return std::make_unique<BiCgStab<double, assembly::Index>>(
+                p, std::make_unique<Identity<double, assembly::Index>>());
+        }
+        /** @brief 数值状态的稳定字符串。@param status 求解终止状态。@pre 枚举有效。@return 机器字符串。@code auto
+         * s=statusName(status); @endcode */
+        std::string statusName(SolveStatus status) {
+            switch (status) {
+            case SolveStatus::Converged:
+                return "converged";
+            case SolveStatus::MaxIterations:
+                return "maxIterations";
+            case SolveStatus::Breakdown:
+                return "breakdown";
+            case SolveStatus::NonFinite:
+                return "nonFinite";
+            }
+            return "error";
+        }
+    } // namespace
+    int runCase(const std::filesystem::path& input, const std::filesystem::path& output,
+                const volatile std::sig_atomic_t* interrupted) {
+        const auto started = Clock::now();
+        std::unique_ptr<io::ResultArchive> archive;
+        bool outputStage = false, solveCompleted = false;
+        try {
+            auto stage = Clock::now();
+            auto loaded = io::loadCase(input);
+            diagnostics(loaded.diagnostics_);
+            if (!loaded.definition_) {
+                return 2;
+            }
+            loaded.definition_->output_.directory_ = std::filesystem::absolute(output).lexically_normal();
+            auto msh = io::loadMsh(loaded.definition_->mesh_.path_);
+            const double inputS = elapsed(stage);
+            stage = Clock::now();
+            auto binding = bindCase(*loaded.definition_, std::make_shared<const mesh::Mesh>(std::move(msh.mesh_)));
+            diagnostics(binding.diagnostics_);
+            if (!binding.bound_) {
+                return 2;
+            }
+            auto space = buildTemperatureSpace(*binding.bound_);
+            diagnostics(space.diagnostics_);
+            if (!space.space_) {
+                return 2;
+            }
+            auto prepared = prepareThermalCase(binding.bound_, space.space_);
+            diagnostics(prepared.diagnostics());
+            if (!prepared.ok()) {
+                return 2;
+            }
+            ThermalPostprocessPlan postprocess(prepared.prepared());
+            const double preparationS = elapsed(stage);
+            stage = Clock::now();
+            auto model = assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared()));
+            const double assemblyS = elapsed(stage);
+            stage = Clock::now();
+            outputStage = true;
+            archive = std::make_unique<io::ResultArchive>(output, input, model, postprocess);
+            for (const auto& d : loaded.diagnostics_.entries()) {
+                archive->addDiagnostic(d, "input");
+            }
+            for (const auto& d : binding.diagnostics_.entries()) {
+                archive->addDiagnostic(d, "binding");
+            }
+            for (const auto& d : space.diagnostics_.entries()) {
+                archive->addDiagnostic(d, "space");
+            }
+            for (const auto& d : prepared.diagnostics().entries()) {
+                archive->addDiagnostic(d, "preparation");
+            }
+            outputStage = false;
+            archive->timing("input", inputS);
+            archive->timing("preparation", preparationS);
+            archive->timing("assembly", assemblyS);
+            double outputS = elapsed(stage), setupS = 0, solveS = 0, postprocessS = 0;
+            const auto& c = binding.bound_->data().definition_;
+            const auto& constraints = prepared.prepared()->conditions()->constraints();
+            std::cout << "DOF=" << model.spatial().rowCount() << " nnz=" << model.spatial().nonZeroCount() << '\n';
+            // 候选经规定值投影和真实残差复核后才接受；历史状态保留至后处理完成。
+            auto advance = [&](const systems::LinearSystem& system, const Vector<double>* previous,
+                               io::StepRecord record, bool final) -> std::optional<Vector<double>> {
+                if (interrupted && *interrupted) {
+                    throw std::runtime_error("用户请求中断");
+                }
+                try {
+                    auto tick = Clock::now();
+                    auto iterative = solver(c.linearSolver_);
+                    iterative->setup(system.matrix());
+                    Vector<double> candidate(system.rhs().size());
+                    if (previous && c.linearSolver_.initialGuess_ == InitialGuess::PreviousStep) {
+                        candidate.copyDataFrom(*previous);
+                    }
+                    else {
+                        auto code = cudaMemset(candidate.deviceData(), 0, candidate.size() * sizeof(double));
+                        if (code != cudaSuccess) {
+                            throw CudaError(code, "initial guess");
+                        }
+                    }
+                    record.setupS_ = elapsed(tick);
+                    setupS += record.setupS_;
+                    tick = Clock::now();
+                    record.solve_ = iterative->apply(system.rhs(), candidate);
+                    record.solveS_ = elapsed(tick);
+                    solveS += record.solveS_;
+                    record.status_ = statusName(record.solve_->status_);
+                    if (record.solve_->status_ != SolveStatus::Converged) {
+                        record.kind_ = "failedAttempt";
+                        record.errorCode_ = "SOLVER_FAILED";
+                        outputStage = true;
+                        archive->publishStep(record, nullptr, false);
+                        archive->finish(false, record.errorCode_, "线性求解未收敛");
+                        outputStage = false;
+                        return {};
+                    }
+                    candidate =
+                        systems::projectTemperatureState(candidate, constraints.dofs(), constraints.temperatures());
+                    tick = Clock::now();
+                    linalg::IterationContext<double, assembly::Index> check(system.matrix());
+                    Vector<double> residual(candidate.size());
+                    check.residual(system.rhs(), candidate, residual);
+                    record.acceptedResidual_ = check.norm(residual);
+                    const auto norm = check.norm(system.rhs());
+                    setupS += elapsed(tick);
+                    const double tolerance =
+                        std::max(c.linearSolver_.absoluteTolerance_, c.linearSolver_.relativeTolerance_ * norm);
+                    if (!std::isfinite(*record.acceptedResidual_) || *record.acceptedResidual_ > tolerance) {
+                        record.kind_ = "failedAttempt";
+                        record.status_ = "error";
+                        record.errorCode_ = "ACCEPTANCE_RESIDUAL";
+                        outputStage = true;
+                        archive->publishStep(record, nullptr, false);
+                        archive->finish(false, record.errorCode_, "规定温度投影后真实残差未达标");
+                        outputStage = false;
+                        return {};
+                    }
+                    archive->accepted(record.step_, record.time_);
+                    tick = Clock::now();
+                    const bool saveFrame = io::shouldSave(c.output_, c.time_.has_value(), record.step_, final, false);
+                    auto fields = postprocess.evaluate(model, candidate, previous, record.dt_, record.step_,
+                                                       record.time_, false, saveFrame);
+                    record.postprocessS_ = elapsed(tick);
+                    postprocessS += record.postprocessS_;
+                    outputStage = true;
+                    tick = Clock::now();
+                    archive->publishStep(record, &fields, saveFrame);
+                    outputS += elapsed(tick);
+                    outputStage = false;
+                    std::cout << "step=" << record.step_ << " iterations=" << record.solve_->iterations_
+                              << " residual=" << *record.acceptedResidual_ << " temperature[K]=[" << fields.minimumK_
+                              << ", " << fields.maximumK_ << "]\n";
+                    return candidate;
+                }
+                catch (...) {
+                    if (!outputStage) {
+                        record.kind_ = "failedAttempt";
+                        record.status_ = "error";
+                        record.errorCode_ = "RUN_ERROR";
+                        try {
+                            outputStage = true;
+                            archive->publishStep(record, nullptr, false);
+                            outputStage = false;
+                        }
+                        catch (const std::exception& failure) {
+                            std::cerr << "记录失败尝试失败: " << failure.what() << '\n';
+                        }
+                    }
+                    throw;
+                }
+            };
+            if (!c.time_) {
+                io::StepRecord record;
+                if (!advance(buildThermalSteadySystem(model), nullptr, record, true)) {
+                    return 3;
+                }
+            }
+            else {
+                Vector<double> previous(
+                    std::span<const double>(*prepared.prepared()->conditions()->initialTemperature()));
+                double time = c.time_->start_;
+                std::size_t completed = 0;
+                archive->accepted(0, time);
+                io::StepRecord record;
+                record.kind_ = "initial";
+                record.status_ = "provided";
+                record.time_ = time;
+                stage = Clock::now();
+                const bool saveInitial = io::shouldSave(c.output_, true, 0, false, true);
+                auto fields = postprocess.evaluate(model, previous, nullptr, {}, 0, time, true, saveInitial);
+                record.postprocessS_ = elapsed(stage);
+                postprocessS += record.postprocessS_;
+                outputStage = true;
+                stage = Clock::now();
+                archive->publishStep(record, &fields, saveInitial);
+                outputS += elapsed(stage);
+                outputStage = false;
+                while (auto step = nextTimeStep(*c.time_, time, completed)) {
+                    record = io::StepRecord{};
+                    record.step_ = step->index_;
+                    record.time_ = step->end_;
+                    record.dt_ = step->duration_;
+                    auto next = advance(buildThermalStepSystem(model, previous, step->duration_), &previous, record,
+                                        step->end_ == c.time_->end_);
+                    if (!next) {
+                        return 3;
+                    }
+                    previous = std::move(*next);
+                    time = step->end_;
+                    completed = step->index_;
+                }
+            }
+            solveCompleted = true;
+            archive->timing("solverSetup", setupS);
+            archive->timing("solve", solveS);
+            archive->timing("postprocess", postprocessS);
+            archive->timing("output", outputS);
+            archive->timing("total", elapsed(started));
+            outputStage = true;
+            archive->finish(true);
+            outputStage = false;
+            std::cout << "结果目录: " << output.string() << '\n';
+            return 0;
+        }
+        catch (const std::exception& e) {
+            std::cerr << e.what() << '\n';
+            if (archive) {
+                try {
+                    archive->timing("total", elapsed(started));
+                    const bool cancelled = interrupted && *interrupted;
+                    archive->finish(solveCompleted,
+                                    outputStage     ? "OUTPUT_IO"
+                                        : cancelled ? "USER_INTERRUPTED"
+                                                    : "RUN_ERROR",
+                                    e.what(), outputStage, cancelled);
+                }
+                catch (const std::exception& nested) {
+                    std::cerr << "终结摘要失败: " << nested.what() << '\n';
+                }
+            }
+            return interrupted && *interrupted ? 130 : 1;
+        }
+    }
+} // namespace emberfield::problem

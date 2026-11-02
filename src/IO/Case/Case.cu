@@ -679,7 +679,8 @@ namespace emberfield::io {
                 const auto& v = root.get("output");
                 const std::string p = "/output";
                 object(v, p,
-                       {"directory", "format", "fields", "overwrite", "schedule", "includeInitial", "includeFinal"});
+                       {"directory", "format", "fields", "overwrite", "schedule", "includeInitial", "includeFinal",
+                        "encoding", "energy", "monitors", "limits"});
                 if (has(v, "directory")) {
                     c.output_.directory_ = text(v.get("directory"), p + "/directory");
                 }
@@ -688,10 +689,144 @@ namespace emberfield::io {
                 }
                 if (has(v, "fields")) {
                     const auto& fields = array(v.get("fields"), p + "/fields");
-                    if (fields.size() != 1) {
-                        fail("UNSUPPORTED_CAPABILITY", p + "/fields", "首期仅支持单个temperature字段");
+                    c.output_.fields_.clear();
+                    for (const auto& f : fields) {
+                        const auto name = text(f, p + "/fields");
+                        if (name == "temperature") {
+                            c.output_.fields_.push_back(OutputField::Temperature);
+                        }
+                        else if (name == "temperatureGradient") {
+                            c.output_.fields_.push_back(OutputField::TemperatureGradient);
+                        }
+                        else if (name == "heatFlux") {
+                            c.output_.fields_.push_back(OutputField::HeatFlux);
+                        }
+                        else {
+                            fail("INVALID_VALUE", p + "/fields", "未知输出场");
+                        }
                     }
-                    literal(fields[0], p + "/fields/0", "temperature");
+                }
+                if (has(v, "encoding")) {
+                    const auto name = text(v.get("encoding"), p + "/encoding");
+                    if (name == "ascii") {
+                        c.output_.encoding_ = OutputEncoding::Ascii;
+                    }
+                    else if (name != "appendedRaw") {
+                        fail("INVALID_VALUE", p + "/encoding", "未知输出编码");
+                    }
+                }
+                if (has(v, "energy")) {
+                    const auto& e = v.get("energy");
+                    object(e, p + "/energy", {"enabled", "absoluteToleranceW", "relativeTolerance"});
+                    if (has(e, "enabled")) {
+                        c.output_.energy_.enabled_ = boolean(e.get("enabled"), p + "/energy/enabled");
+                    }
+                    if (has(e, "absoluteToleranceW")) {
+                        c.output_.energy_.absoluteToleranceW_ =
+                            number(e.get("absoluteToleranceW"), p + "/energy/absoluteToleranceW");
+                    }
+                    if (has(e, "relativeTolerance")) {
+                        c.output_.energy_.relativeTolerance_ =
+                            number(e.get("relativeTolerance"), p + "/energy/relativeTolerance");
+                    }
+                }
+                if (has(v, "limits")) {
+                    const auto& l = v.get("limits");
+                    object(l, p + "/limits",
+                           {"maxPoints", "maxCells", "maxHostBytes", "maxDeviceBytes", "batchCells", "maxFrames",
+                            "maxMonitors", "maxOutputBytes"});
+                    auto& o = c.output_.limits_;
+                    if (has(l, "maxPoints")) {
+                        o.maxPoints_ = positive(l.get("maxPoints"), p + "/limits/maxPoints");
+                    }
+                    if (has(l, "maxCells")) {
+                        o.maxCells_ = positive(l.get("maxCells"), p + "/limits/maxCells");
+                    }
+                    if (has(l, "maxHostBytes")) {
+                        o.maxHostBytes_ = positive(l.get("maxHostBytes"), p + "/limits/maxHostBytes");
+                    }
+                    if (has(l, "maxDeviceBytes")) {
+                        o.maxDeviceBytes_ = positive(l.get("maxDeviceBytes"), p + "/limits/maxDeviceBytes");
+                    }
+                    if (has(l, "batchCells")) {
+                        o.batchCells_ = positive(l.get("batchCells"), p + "/limits/batchCells");
+                    }
+                    if (has(l, "maxFrames")) {
+                        o.maxFrames_ = positive(l.get("maxFrames"), p + "/limits/maxFrames");
+                    }
+                    if (has(l, "maxMonitors")) {
+                        o.maxMonitors_ = positive(l.get("maxMonitors"), p + "/limits/maxMonitors");
+                    }
+                    if (has(l, "maxOutputBytes")) {
+                        o.maxOutputBytes_ = positive(l.get("maxOutputBytes"), p + "/limits/maxOutputBytes");
+                    }
+                }
+                if (has(v, "monitors")) {
+                    for (const auto& m : array(v.get("monitors"), p + "/monitors")) {
+                        const auto q = p + "/monitors";
+                        const auto kind = text(required(m, "kind", q), q + "/kind");
+                        MonitorDefinition d;
+                        d.id_ = text(required(m, "id", q), q + "/id");
+                        if (kind == "node") {
+                            object(m, q, {"id", "kind", "nodeTag"});
+                            const auto s = text(required(m, "nodeTag", q), q + "/nodeTag");
+                            std::uint64_t tag = 0;
+                            if (s.empty() || s.front() == '0') {
+                                fail("INVALID_VALUE", q + "/nodeTag", "标签必须是正十进制字符串");
+                            }
+                            for (char ch : s) {
+                                if (ch < '0' || ch > '9' || tag > (UINT64_MAX - static_cast<unsigned>(ch - '0')) / 10) {
+                                    fail("INVALID_VALUE", q + "/nodeTag", "标签越界或非法");
+                                }
+                                tag = tag * 10 + static_cast<unsigned>(ch - '0');
+                            }
+                            d.value_ = NodeMonitor{tag};
+                        }
+                        else if (kind == "point") {
+                            object(m, q, {"id", "kind", "positionM", "toleranceM"});
+                            PointMonitor point;
+                            const auto& a = array(required(m, "positionM", q), q + "/positionM");
+                            if (a.size() != 3) {
+                                fail("INVALID_VALUE", q + "/positionM", "坐标必须有三个分量");
+                            }
+                            for (std::size_t i = 0; i < 3; ++i) {
+                                point.positionM_[i] = number(a[i], q + "/positionM");
+                            }
+                            if (has(m, "toleranceM")) {
+                                point.toleranceM_ = number(m.get("toleranceM"), q + "/toleranceM");
+                            }
+                            d.value_ = point;
+                        }
+                        else if (kind == "region") {
+                            object(m, q, {"id", "kind", "region", "statistics"});
+                            RegionMonitor r;
+                            r.region_ = region(required(m, "region", q), q + "/region");
+                            r.statistics_.clear();
+                            for (const auto& s : array(required(m, "statistics", q), q + "/statistics")) {
+                                const auto name = text(s, q + "/statistics");
+                                if (name == "temperatureMin") {
+                                    r.statistics_.push_back(RegionStatistic::TemperatureMin);
+                                }
+                                else if (name == "temperatureMax") {
+                                    r.statistics_.push_back(RegionStatistic::TemperatureMax);
+                                }
+                                else if (name == "temperatureMean") {
+                                    r.statistics_.push_back(RegionStatistic::TemperatureMean);
+                                }
+                                else if (name == "storedEnergy") {
+                                    r.statistics_.push_back(RegionStatistic::StoredEnergy);
+                                }
+                                else {
+                                    fail("INVALID_VALUE", q + "/statistics", "未知区域统计量");
+                                }
+                            }
+                            d.value_ = std::move(r);
+                        }
+                        else {
+                            fail("INVALID_VALUE", q + "/kind", "未知监测类型");
+                        }
+                        c.output_.monitors_.push_back(std::move(d));
+                    }
                 }
                 if (has(v, "overwrite")) {
                     c.output_.overwrite_ = boolean(v.get("overwrite"), p + "/overwrite");
