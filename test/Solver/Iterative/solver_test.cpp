@@ -53,36 +53,6 @@ namespace {
         }
         return CsrMatrix<T, I>(n, n, offsets, columns, values);
     }
-    /** @brief 验证源文件封装后的层次移动、别名动作和所有权保留。
-     * @tparam T 精度。@tparam I 索引。@pre GPU 可用。@note 无参数、无返回值。
-     * @code checkAmgMove<double, int>(); @endcode */
-    template <linalg::Scalar T, CsrIndex I>
-    void checkAmgMove() {
-        const auto a = poisson<T, I>(4);
-        const std::vector<T> ones(4, T(1));
-        Vector<T> expected{std::span<const T>(ones)};
-        auto rhs = linalg::multiply(a, expected);
-        Amg<T, I> original;
-        original.setup(a);
-        Amg<T, I> moved(std::move(original));
-        EXPECT_EQ(original.levelCount(), 0u);
-        EXPECT_THROW(original.apply(rhs, expected), std::logic_error);
-        Amg<T, I> target;
-        target.setup(a);
-        target = std::move(moved);
-        EXPECT_EQ(moved.levelCount(), 0u);
-        EXPECT_EQ(target.levelCount(), 1u);
-        auto* address = rhs.data();
-        target.apply(rhs, rhs);
-        EXPECT_EQ(rhs.data(), address);
-        for (auto value : linalg::detail::hostCopy(rhs)) {
-            EXPECT_NEAR(value, T(1), 1e-5);
-        }
-    }
-    TYPED_TEST(SolverTest, compiledAmgMovesStateForBothIndexWidths) {
-        checkAmgMove<TypeParam, int>();
-        checkAmgMove<TypeParam, std::int64_t>();
-    }
     TYPED_TEST(SolverTest, jacobiMatchesAnalyticSweepsAndPreservesPolicy) {
         using T = TypeParam;
         const auto a = poisson<T>(2);

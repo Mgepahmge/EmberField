@@ -19,7 +19,7 @@ target_sources(thermofem_tests PRIVATE FEM/Assembly/assembly_test.cpp Numerics/L
 gtest_discover_tests(thermofem_tests NO_PRETTY_VALUES)
 
 add_executable(thermofem_amg_tests Solver/Preconditioner/amg_internal_test.cu
-    Solver/Iterative/solver_test.cpp
+    Solver/Preconditioner/amg_move_test.cpp
     Solver/Preconditioner/NativeAggregationOracle.cu)
 target_link_libraries(thermofem_amg_tests PRIVATE ThermoFEM::thermofem GTest::gtest_main)
 foreach(cudaInclude IN LISTS CUDAToolkit_INCLUDE_DIRS)
