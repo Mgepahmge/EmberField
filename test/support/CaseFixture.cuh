@@ -2,7 +2,7 @@
  * @brief 为算例语义测试构造两个三角形及显式边界，不依赖文件或GPU。
  */
 #pragma once
-#include <Case/Binding.cuh>
+#include <Simulation/Case/Binding.cuh>
 #include <algorithm>
 #include <memory>
 namespace casefixture {

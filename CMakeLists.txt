@@ -19,13 +19,13 @@ include(CTest)
 find_package(CUDAToolkit 12.0 REQUIRED)
 option(THERMOFEM_BUILD_EXAMPLES "Build ThermoFEM examples" ON)
 
-add_library(thermofem STATIC src/version.cu src/DataStructure/Memory.cu src/DataStructure/CsrMatrix.cu src/LinearAlgebra/Backend.cu src/LinearAlgebra/IterationContext.cu src/IO/MatrixMarket.cu src/Multigrid/GpuAggregation.cu src/Mesh/Mesh.cu src/IO/Msh.cu
-    src/Case/Diagnostics.cu src/Case/Validation.cu src/Case/Region.cu src/Case/Binding.cu src/Mesh/FacetTopology.cu src/IO/Case.cu
-    src/FiniteElement/ReferenceElement.cu src/FiniteElement/Space.cu src/Case/TemperatureSpace.cu
-    src/FiniteElement/EvaluationError.cu src/FiniteElement/Geometry.cu src/FiniteElement/Quadrature.cu src/FiniteElement/Integration.cu
-    src/Thermal/ElementOperations.cu src/Case/Conditions.cu src/Case/Preparation.cu src/Thermal/GpuElementOperations.cu src/Case/GpuPreparation.cu)
+add_library(thermofem STATIC src/version.cu src/DataStructure/Storage/Memory.cu src/DataStructure/Storage/CsrMatrix.cu src/Numerics/LinearAlgebra/Backend.cu src/Numerics/LinearAlgebra/IterationContext.cu src/IO/Matrix/MatrixMarket.cu src/Solver/Preconditioner/Amg.cu src/DataStructure/Mesh/Mesh.cu src/IO/Mesh/Msh.cu
+    src/Simulation/Case/Diagnostics.cu src/Simulation/Case/Validation.cu src/Simulation/Case/Region.cu src/Simulation/Case/Binding.cu src/DataStructure/Mesh/FacetTopology.cu src/IO/Case/Case.cu
+    src/FEM/Element/ReferenceElement.cu src/FEM/Space/Space.cu src/Simulation/Case/TemperatureSpace.cu
+    src/FEM/Element/EvaluationError.cu src/FEM/Element/Geometry.cu src/FEM/Element/Quadrature.cu src/FEM/Element/Integration.cu
+    src/Simulation/Thermal/ElementOperations.cu src/Simulation/Case/Conditions.cu src/Simulation/Case/Preparation.cu src/Simulation/Thermal/GpuElementOperations.cu src/Simulation/Case/GpuPreparation.cu)
 add_library(ThermoFEM::thermofem ALIAS thermofem)
-target_sources(thermofem PRIVATE src/Assembly/Plan.cu src/Assembly/Operations.cu src/LinearSystem/Operations.cu src/Case/Assembly.cu src/Case/System.cu)
+target_sources(thermofem PRIVATE src/FEM/Assembly/Plan.cu src/FEM/Assembly/Operations.cu src/Numerics/LinearSystem/Operations.cu src/Simulation/Case/Assembly.cu src/Simulation/Case/System.cu)
 target_include_directories(thermofem SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third-party/picojson")
 target_include_directories(thermofem PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

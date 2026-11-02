@@ -3,7 +3,7 @@
  * @brief 实现 ThermoFEM 库版本查询接口。
  */
 
-#include <thermofem/version.cuh>
+#include <version.cuh>
 
 namespace thermofem {
 

@@ -1,6 +1,6 @@
 # 线性代数
 
-包含 `<LinearAlgebra/LinearAlgebra.cuh>`，命名函数位于 `thermofem::linalg`，
+包含 `<Numerics/LinearAlgebra/LinearAlgebra.cuh>`，命名函数位于 `thermofem::linalg`，
 运算符通过数据结构所在命名空间查找。支持 float、double 与 32/64 位有符号 CSR 索引。
 
 向量支持加减、缩放、点积、AXPY、一范数和二范数；稠密矩阵支持加减、缩放、
@@ -17,4 +17,4 @@
 SpMV、SpMM 支持 64 位索引；稀疏结构加减、转置、乘积受底层 32 位接口限制，
 超出范围抛出异常。当前不支持复数及混合精度。
 
-示例见 `example/example-3.cu`。迭代求解中的缓存复用由独立执行上下文提供。
+示例见 `example/Numerics/linear-algebra.cu`。迭代求解中的缓存复用由独立执行上下文提供。

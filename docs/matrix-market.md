@@ -2,7 +2,7 @@
 
 ## 输入格式
 
-`<IO/MatrixMarket.cuh>` 提供 `thermofem::io::readMatrixMarket`，从输入流读取
+`<IO/Matrix/MatrixMarket.cuh>` 提供 `thermofem::io::readMatrixMarket`，从输入流读取
 Matrix Market 坐标格式，返回主机端 `HostCsr`，供数据结构和求解组件使用。
 
 支持实数或整数条目，以及 general 和 symmetric 矩阵。读取时检查文件头、
@@ -10,8 +10,8 @@ Matrix Market 坐标格式，返回主机端 `HostCsr`，供数据结构和求�
 重复坐标可保留在主机 CSR 中，设备计算接口负责所需的规范化。
 
 ```cpp
-#include <IO/MatrixMarket.cuh>
-#include <DataStructure/CsrMatrix.cuh>
+#include <IO/Matrix/MatrixMarket.cuh>
+#include <DataStructure/Storage/CsrMatrix.cuh>
 #include <fstream>
 
 std::ifstream input("data/matrix.mtx");

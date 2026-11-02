@@ -13,7 +13,7 @@
 ## 独立使用
 
 ```cpp
-#include <FiniteElement/Space.cuh>
+#include <FEM/Space/Space.cuh>
 
 using namespace thermofem;
 std::vector<mesh::CellRef> active{{0, 0}, {0, 1}};
@@ -38,7 +38,7 @@ if (result.space_) {
 ## 从算例准备空间
 
 ```cpp
-#include <Case/TemperatureSpace.cuh>
+#include <Simulation/Case/TemperatureSpace.cuh>
 auto space = thermofem::problem::buildTemperatureSpace(*binding.bound_);
 ```
 

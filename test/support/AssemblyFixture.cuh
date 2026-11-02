@@ -2,7 +2,7 @@
  * @brief 全局组装和系统测试的独立主机稠密对照工具。
  */
 #pragma once
-#include <Assembly/Operations.cuh>
+#include <FEM/Assembly/Operations.cuh>
 #include <gtest/gtest.h>
 namespace assemblyfixture {
     /** @brief 下载缓冲区。@tparam T 元素。@param b 缓冲区。@pre 已同步。

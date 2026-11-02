@@ -32,7 +32,7 @@ CUDA 错误抛出含原始错误码的 `CudaError`；尺寸、结构或可访问
 析构不抛异常并尽力释放资源，运行时关闭或设备丢失时无法保证 CUDA 释放操作成功。
 
 ```cpp
-#include <DataStructure/CudaBuffer.cuh>
+#include <DataStructure/Storage/CudaBuffer.cuh>
 #include <array>
 
 const std::array<double, 3> input{1.0, 2.0, 3.0};
@@ -71,7 +71,7 @@ auto* devicePointer = target.deviceData();
 `copyDataFrom` 还要求形状完全一致。复制赋值覆盖形状、数据及策略，移动后来源为 0 行 0 列。
 
 ```cpp
-#include <DataStructure/DenseMatrix.cuh>
+#include <DataStructure/Storage/DenseMatrix.cuh>
 
 thermofem::DenseMatrix<double> matrix(2, 3, thermofem::PinnedMemory{});
 matrix.at(1, 2) = 7.0;
@@ -100,7 +100,7 @@ matrix.changeMemoryType(thermofem::GlobalMemory{});
 失败时保持原矩阵，过程中需要额外临时存储。
 
 ```cpp
-#include <DataStructure/CsrMatrix.cuh>
+#include <DataStructure/Storage/CsrMatrix.cuh>
 
 const int offsets[]{0, 1, 2};
 const int columns[]{0, 1};
@@ -110,11 +110,11 @@ thermofem::CsrMatrix<double> matrix(2, 2, offsets, columns, values);
 
 ## 运行示例
 
-`example-2` 在 global、mapped 和 managed 内存上实际发射 CUDA 内核，
+`storage` 在 global、mapped 和 managed 内存上实际发射 CUDA 内核，
 核对计算结果，并演示稠密矩阵和 CSR 存储。运行需要设备支持这三类内存：
 
 ```bash
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-./build/example/example-2
+./build/example/storage
 ```

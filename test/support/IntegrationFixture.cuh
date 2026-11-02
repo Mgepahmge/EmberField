@@ -2,7 +2,7 @@
  * @brief 创建有实际几何的单纯形空间供几何、热积分及GPU对照测试复用。
  */
 #pragma once
-#include <FiniteElement/Integration.cuh>
+#include <FEM/Element/Integration.cuh>
 
 namespace integrationfixture {
     /** @brief 创建单个标准单纯形数据。@param d 维数2或3。@pre 合法维数。

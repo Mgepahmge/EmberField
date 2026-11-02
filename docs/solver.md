@@ -26,7 +26,7 @@ apply 为同步调用，接受 global/pinned/mapped/managed 向量，保留输�
 
 ## Jacobi 平滑器
 
-`<Smoother/Jacobi.cuh>` 中的 `Jacobi<T,I>(sweeps, weight)` 使用加权 Jacobi：
+`<Solver/Smoother/Jacobi.cuh>` 中的 `Jacobi<T,I>(sweeps, weight)` 使用加权 Jacobi：
 `x <- x + weight * D^-1 * (b-A*x)`。默认两次扫描，权重为 2/3。
 setup 合并重复 CSR 元素，检查缺失、零及倒数不有限的对角线。
 失败的 setup 保留旧状态；无 setup、尺寸不匹配或跨设备调用抛异常。
@@ -36,7 +36,7 @@ GPU Jacobi 内核与库调用使用默认流并同步返回。
 
 ## AMG 预条件子
 
-`<Preconditioner/Amg.cuh>` 的 `Amg<T,I>` 使用 GPU 原生聚合构造层次，算法参考
+`<Solver/Preconditioner/Amg.cuh>` 的 `Amg<T,I>` 使用 GPU 原生聚合构造层次，算法参考
 作者的非公开项目 YHAMG-GPU。层次构造分为以下阶段：
 
 1. GPU 检查 CSR 是否规范；必要时按坐标排序、重复项求和，保留显式零。
@@ -59,8 +59,8 @@ GPU Jacobi 内核与库调用使用默认流并同步返回。
 `compactSortKeys_` 仅减少排序键位宽，不改变聚合算法。原生 setup 使用 double/int；
 float 与 64 位索引在 GPU 边界转换，迭代计算保持原类型，原生图仍受 int32 容量限制。
 
-`AmgOptions::cycle_` 在以下三种调度中选择；实现位于独立的 `<Multigrid/Cycle.cuh>`，
-通过受约束的运算适配器组合每层操作，不依赖 Amg、矩阵类型或 CUDA：
+`AmgOptions::cycle_` 使用公共枚举 `AmgCycle` 在以下三种调度中选择；调度实现封装于
+`src/Solver/Preconditioner/Amg.cu`，通过受约束的运算适配器组合每层操作：
 
 | 循环 | 递归与初值语义 |
 | --- | --- |
@@ -74,7 +74,7 @@ F 使用参考代码的嵌套迭代定义，不能用两个 V 代替。W 中第�
 
 ```cpp
 thermofem::AmgOptions<double> amgOptions;
-amgOptions.cycle_ = thermofem::multigrid::Cycle::F;
+amgOptions.cycle_ = thermofem::AmgCycle::F;
 amgOptions.preSweeps_ = 1;
 amgOptions.postSweeps_ = 1;
 auto preconditioner = std::make_unique<thermofem::Amg<double>>(amgOptions);
@@ -91,9 +91,9 @@ setup 以完整临时状态构建，失败保留旧状态。一般非对称、�
 
 ## BiCGStab 求解器
 
-`<Solver/BiCgStab.cuh>` 的 `BiCgStab<T,I>` 实现右预条件 BiCGStab，默认使用 AMG。
+`<Solver/Iterative/BiCgStab.cuh>` 的 `BiCgStab<T,I>` 实现右预条件 BiCGStab，默认使用 AMG。
 可通过构造函数传入任意 `std::unique_ptr<Preconditioner<T,I>>`；
-`<Preconditioner/Identity.cuh>` 提供恒等预条件子，适用于无预条件基线验证。
+`<Solver/Preconditioner/Identity.cuh>` 提供恒等预条件子，适用于无预条件基线验证。
 本项目不使用 cuSOLVER。
 
 ```cpp
@@ -118,17 +118,17 @@ double 为 1e-8；较大或病态问题需根据精度和条件数选择可达�
 
 BiCGStab 的 setup 失败会清空就绪状态，因为注入预条件子的内部异常保证可能不同；
 重新成功 setup 后可以继续使用。Jacobi、AMG 的 setup 失败仍保留旧状态。
-完整二维 Poisson 示例见 `example/example-4.cu`。
+完整二维 Poisson 示例见 `example/Solver/poisson-amg.cu`。
 
 ## CG 求解器
 
-`<Solver/Cg.cuh>` 提供 `Cg<T,I>` 和 `CgOptions<T>`。默认组合恒等预条件子，
+`<Solver/Iterative/Cg.cuh>` 提供 `Cg<T,I>` 和 `CgOptions<T>`。默认组合恒等预条件子，
 对应普通 CG；也可注入 `std::unique_ptr<Preconditioner<T,I>>` 实现 PCG。
 矩阵必须对称正定，预条件动作必须固定、线性且对称正定。
 恒等预条件子满足 CG 的数学要求；使用 AMG 时还必须满足下述组合条件。
 
 ```cpp
-#include <Solver/Cg.cuh>
+#include <Solver/Iterative/Cg.cuh>
 
 thermofem::CgOptions<double> options;
 options.relativeTolerance_ = 1e-10;
@@ -182,7 +182,7 @@ PCG 要求的是实际应用的近似逆动作 `B: r -> AMG.apply(r)` 固定、�
 
 ```cpp
 // amgOptions 需满足各层权重、对称平滑和粗层求解条件。
-amgOptions.cycle_ = thermofem::multigrid::Cycle::V;
+amgOptions.cycle_ = thermofem::AmgCycle::V;
 amgOptions.preSweeps_ = amgOptions.postSweeps_ = 1;
 auto amg = std::make_unique<thermofem::Amg<double>>(amgOptions);
 thermofem::Cg<double> solver(cgOptions, std::move(amg));
@@ -193,7 +193,7 @@ auto report = solver.apply(rhs, x);
 一次求解收敛或少量方向上的正二次型不能证明预条件动作对称正定。
 无法保证这些前提时，可使用恒等预条件 CG，或在满足其自身条件时选用 BiCGStab。
 
-## 独立运算接口
+## 运算与封装
 
 求解组件通过独立运算组合算法：
 
@@ -205,4 +205,8 @@ auto report = solver.apply(rhs, x);
 - `multigrid::executeCycle`：受约束且不依赖 GPU 的 V/W/F 调度。
 - `linalg::CoarseLu`：仍可独立使用的 CPU 主元 LU，不用于 AMG 的粗层路径。
 
-这些运算接口可在平滑器、预条件子和求解器之外独立调用。
+`linalg` 运算可在求解组件之外独立调用，位于 `Numerics/LinearAlgebra/`。
+`multigrid` 运算与传输表为 AMG 编译单元内部组件，通过匿名命名空间限制链接可见性，
+不属于安装接口。内部测试在独立测试程序中编译 AMG 实现，与主机基准逐阶段对照。
+公共 AMG 头文件不包含这些实现或循环调度定义；层次状态使用不透明类型和独占所有权。
+构造、析构和移动操作在源文件中定义，提供 float/double 与 32/64 位索引的四种实例。

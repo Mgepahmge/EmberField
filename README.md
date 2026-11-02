@@ -16,16 +16,15 @@ ThermoFEM 是本科毕业设计“基于有限元的热力学仿真求解器设�
 
 ```text
 ThermoFEM/
-├── src/                       # CUDA 实现与主程序，.cu
-├── include/thermofem/          # 公共头文件，.cuh
-├── include/DataStructure/      # CUDA Buffer、向量、稠密与 CSR 矩阵
-├── include/LinearAlgebra/      # cuBLAS/cuSPARSE 运算与运算符
-├── include/Multigrid/          # GPU 聚合、传输、粗层 LU 与独立循环调度
-├── include/Smoother/           # 平滑器组件
-├── include/Preconditioner/     # AMG 与恒等预条件子
-├── include/Solver/             # 分层基类、求解报告、CG与BiCGStab
-├── include/Assembly/           # 通用规范CSR图与GPU稳定散加
-├── include/LinearSystem/       # 系数组合、历史项与对称消元
+├── include/                   # 公共头文件，.cuh
+│   ├── DataStructure/         # Storage、Mesh
+│   ├── Numerics/              # LinearAlgebra、LinearSystem
+│   ├── Solver/                # Iterative、Preconditioner、Smoother
+│   ├── FEM/                   # Element、Space、Assembly
+│   ├── Simulation/            # Case、Thermal
+│   ├── IO/                    # Mesh、Case、Matrix
+│   └── version.cuh            # 库版本接口
+├── src/                       # 按同样两级分类存放 CUDA 实现
 ├── test/                      # GoogleTest 测试，.cpp，独立 CMakeLists.txt
 ├── example/                   # CUDA 示例，独立 CMakeLists.txt
 ├── scripts/build-docs.sh       # 一键构建文档
@@ -41,7 +40,12 @@ ThermoFEM/
 
 除测试用例外，所有源文件使用 `.cu`，所有项目头文件使用 `.cuh`。
 
-算例层位于 `include/Case/`，JSON适配位于 `include/IO/Case.cuh`，独立的单元侧拓扑位于 `include/Mesh/FacetTopology.cuh`。配置读取使用随源码分发的 `third-party/picojson/`，无需另外安装JSON包；原始BSD许可证随源码和安装产物保留，不受本项目MIT许可证替代。
+`test/` 按上述分类组织用例，跨模块公共夹具位于 `test/support/`；`example/` 按用途分类。
+求解器、预条件子、平滑器分别在自己的目录中定义基类。AMG 专用聚合、传输、粗层 LU
+和 V/W/F 调度位于 `src/Solver/Preconditioner/Amg.cu` 内，以独立内部接口组合，公共头文件
+只提供 AMG 配置、诊断和预条件接口。目录归属依据模块职责，不为单一模块的内部组件新增公共分类。
+
+算例层位于 `include/Simulation/Case/`，JSON适配位于 `include/IO/Case/Case.cuh`，独立的单元侧拓扑位于 `include/DataStructure/Mesh/FacetTopology.cuh`。配置读取使用随源码分发的 `third-party/picojson/`，无需另外安装JSON包；原始BSD许可证随源码和安装产物保留，不受本项目MIT许可证替代。
 
 ## 算例输入与绑定
 
@@ -54,7 +58,7 @@ ThermoFEM/
 
 `case-inspect`分别加载配置、MSH与绑定，不调用GPU。退出码0仅表示配置与网格身份绑定通过；绑定对象列出需后续组件检查的pending项目，不随下游处理修改。使用`solve-case`继续生成A、b并求解；VTU导出属于独立输出职责。文件路径相对配置所在目录；网格坐标可缩放为米，二维厚度本身已使用米，不再次缩放。外向热流为正表示散热。示例由本项目编写，可随代码发布。
 
-有限元空间层位于 `include/FiniteElement/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功后仍须由后续组件完成几何、物理约束、组装和系统检查。
+有限元空间层位于 `include/FEM/`，支持Triangle3/Tet4连续标量P1参考形函数及确定性局部到全局DOF映射；通过组合共享只读Mesh，不依赖算例文件格式。使用 `./build/example/space-inspect example/cases/steady.json` 检查算例空间，接口与限制见[有限元空间手册](docs/finite-element-space.md)。编号成功后仍须由后续组件完成几何、物理约束、组装和系统检查。
 
 ## 几何、条件与局部热运算
 
@@ -76,7 +80,7 @@ ThermoFEM/
 - GoogleTest：优先使用已安装的 CMake 包；未找到时自动获取 `v1.17.0`，首次配置需要访问 GitHub。可通过 `FETCHCONTENT_SOURCE_DIR_GOOGLETEST` 指定离线源码目录。
 - Doxygen（生成文档时需要，不依赖 Graphviz 或 LaTeX）。
 
-默认编译架构为 `75`，请根据目标 GPU 和 Toolkit 支持范围设置 `CMAKE_CUDA_ARCHITECTURES`；例如 Ada GPU 可指定 `89`。`example-1` 仅调用版本接口；`example-2` 包含真实 CUDA 内核，并要求设备支持映射内存和统一内存。测试在设备不可用时明确跳过 GPU 用例。
+默认编译架构为 `75`，请根据目标 GPU 和 Toolkit 支持范围设置 `CMAKE_CUDA_ARCHITECTURES`；例如 Ada GPU 可指定 `89`。`version` 仅调用版本接口；`storage` 包含真实 CUDA 内核，并要求设备支持映射内存和统一内存。测试在设备不可用时明确跳过 GPU 用例。
 
 ## 构建与运行
 
@@ -86,10 +90,10 @@ ThermoFEM/
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ./build/thermofem
-./build/example/example-1
-./build/example/example-2
-./build/example/example-3
-./build/example/example-4
+./build/example/version
+./build/example/storage
+./build/example/linear-algebra
+./build/example/poisson-amg
 ctest --test-dir build --output-on-failure
 ```
 
@@ -141,7 +145,7 @@ bash scripts/build-docs.sh
 
 上述相对路径命令从项目根目录执行；从其他目录使用脚本的绝对路径。输出入口为 `build/docs/html/index.html`。如果配置 CMake 时已找到 Doxygen，也可执行 `cmake --build build --target docs`。
 
-`<Solver/Cg.cuh>` 提供默认使用恒等预条件子的 CG 求解器，用于对称正定矩阵。
+`<Solver/Iterative/Cg.cuh>` 提供默认使用恒等预条件子的 CG 求解器，用于对称正定矩阵。
 注入预条件子时，其动作也必须固定、线性且对称正定。
 AMG 配合 PCG 的循环、对称平滑、各层权重和粗层求解前提见 [求解组件](docs/solver.md)；默认参数并不对任意 SPD 矩阵保证相容。
 
@@ -180,7 +184,7 @@ GitHub Actions 使用托管的 Ubuntu runner，仅执行代码格式检查与文
 
 ## 网格与MSH文件
 
-`include/Mesh/` 提供独立于文件与物理算例的宿主网格模型，`include/IO/Msh.cuh` 提供
+`include/DataStructure/Mesh/` 提供独立于文件与物理算例的宿主网格模型，`include/IO/Mesh/Msh.cuh` 提供
 MSH4.1/2.2的ASCII与二进制加载、保存。支持高阶混合单元、实体与物理组、参数坐标、
 周期关系以及分区元数据；保存时检查目标格式的可表示性，不静默丢失信息。
 网格结构不依赖文件版本、编码或求解器，网格模块本身不承担FEM组装。

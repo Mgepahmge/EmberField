@@ -13,7 +13,7 @@ auto space = thermofem::problem::buildTemperatureSpace(*binding.bound_);
 auto result = thermofem::problem::prepareThermalCase(binding.bound_, space.space_);
 ~~~
 
-每一步必须先检查成功对象及诊断，不能直接解引用失败结果。完整受检用法见example/prepare-inspect.cu。PreparationResult::ok仅代表本阶段成功；旧BoundCase能力报告不变，尚未生成A、b，也不认证稳态纯Neumann、全局正定性或CG适用性。
+每一步必须先检查成功对象及诊断，不能直接解引用失败结果。完整受检用法见example/Simulation/prepare-inspect.cu。PreparationResult::ok仅代表本阶段成功；旧BoundCase能力报告不变，尚未生成A、b，也不认证稳态纯Neumann、全局正定性或CG适用性。
 
 ~~~sh
 ./build/example/prepare-inspect example/cases/steady.json cpu

@@ -3,7 +3,7 @@
  * @brief 验证当前链接的 ThermoFEM 库返回初始版本号。
  */
 
-#include <thermofem/version.cuh>
+#include <version.cuh>
 
 #include <gtest/gtest.h>
 

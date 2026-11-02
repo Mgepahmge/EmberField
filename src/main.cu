@@ -3,7 +3,7 @@
  * @brief 提供 ThermoFEM 命令行入口，当前输出库版本信息。
  */
 
-#include <thermofem/version.cuh>
+#include <version.cuh>
 
 #include <iostream>
 

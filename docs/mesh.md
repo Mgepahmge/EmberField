@@ -2,7 +2,7 @@
 
 ## 边界与依赖
 
-`Mesh/Mesh.cuh` 定义宿主侧网格拓扑模型；`IO/Msh.cuh` 定义独立文件适配器。
+`DataStructure/Mesh/Mesh.cuh` 定义宿主侧网格拓扑模型；`IO/Mesh/Msh.cuh` 定义独立文件适配器。
 网格可以直接由程序构造，不需要MSH文件、CUDA分配、材料参数、边界条件或求解器。
 本模块不进行FEM组装、自由度编号、Jacobian有效性判断或温度场求解。
 
@@ -21,7 +21,7 @@
 ## 读取与保存
 
 ```cpp
-#include <IO/Msh.cuh>
+#include <IO/Mesh/Msh.cuh>
 
 auto document = thermofem::io::loadMsh("input.msh");
 const auto& mesh = document.mesh_;
