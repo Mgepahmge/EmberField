@@ -1,0 +1,36 @@
+Header
+  Mesh DB "." "mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 2D"
+  Simulation Type = Steady State
+End
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Procedure = "HeatSolve" "HeatSolver"
+  Variable = Temperature
+End
+Material 1
+  Heat Conductivity = 2
+  Density = 3
+  Heat Capacity = 4
+End
+Body Force 1
+  Heat Source = 4
+End
+Boundary Condition 1
+  Target Boundaries = 1
+  Temperature = Real 300
+End
+Boundary Condition 2
+  Target Boundaries = 2
+  Heat Flux BC = True
+  Heat Flux = 5
+End

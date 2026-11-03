@@ -15,6 +15,12 @@ target_link_libraries(emberfield_tests PRIVATE EmberField::emberfield GTest::gte
 target_sources(emberfield_tests PRIVATE IO/Result/result_test.cpp)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    if(Python3_VERSION VERSION_GREATER_EQUAL "3.10")
+        add_test(NAME case-conversion-unit COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/IO/Case/test_conversion.py")
+        add_test(NAME case-conversion-integration COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/IO/Case/test_conversion.py" --executable "$<TARGET_FILE:emberfield_cli>")
+    endif()
     add_test(NAME cli-result-contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/IO/Result/validate_cli.py"
         "$<TARGET_FILE:emberfield_cli>" "${PROJECT_SOURCE_DIR}/example/cases")
 endif()
