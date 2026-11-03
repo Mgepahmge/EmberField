@@ -2,6 +2,7 @@
  * @brief 验证完整协议、picojson严格适配、精确整数、来源位置与资源限额。
  */
 #include <IO/Case/Case.cuh>
+#include <IO/Case/ResourceLimits.cuh>
 #include <clocale>
 #include <gtest/gtest.h>
 #include <sstream>
@@ -216,6 +217,66 @@ namespace {
         auto result = parse(steady());
         ASSERT_TRUE(result.definition_);
         EXPECT_DOUBLE_EQ(result.definition_->analysis_.thickness_.value(), 0.01);
+    }
+    TEST(ResourceLimitsIO, DecodesEveryBudgetWithoutFloatingPointConversion) {
+        std::istringstream input(R"({"schemaVersion":1,
+          "case":{"maxBytes":101,"maxValues":102,"maxStringBytes":103,"maxNesting":104,"maxSelectorDepth":105,"maxDiagnostics":106},
+          "mesh":{"maxRecords":201,"maxBytes":202},
+          "space":{"maxCells":301,"maxLocalDofs":302,"maxGlobalDofs":303,"maxDiagnostics":304},
+          "preparation":{"maxCells":401,"maxDofs":402,"maxFacetUses":403,"maxAssociations":404,"maxDiagnostics":405},
+          "assembly":{"maxDofs":501,"maxStencils":502,"maxLocalEntries":503,"maxNonzeros":504},
+          "integration":{"maxElements":601,"maxScalars":602},
+          "output":{"maxPoints":701,"maxCells":702,"maxHostBytes":703,"maxDeviceBytes":704,"maxFrames":705,"maxMonitors":706,"maxOutputBytes":9007199254740993}})");
+        const auto r = io::readResourceLimits(input);
+        EXPECT_EQ(r.case_.maxBytes_, 101);
+        EXPECT_EQ(r.case_.maxValues_, 102);
+        EXPECT_EQ(r.case_.maxStringBytes_, 103);
+        EXPECT_EQ(r.case_.maxNesting_, 104);
+        EXPECT_EQ(r.case_.maxSelectorDepth_, 105);
+        EXPECT_EQ(r.case_.maxDiagnostics_, 106);
+        EXPECT_EQ(r.mesh_.maxRecords_, 201);
+        EXPECT_EQ(r.mesh_.maxBytes_, 202);
+        EXPECT_EQ(r.space_.maxCells_, 301);
+        EXPECT_EQ(r.space_.maxLocalDofs_, 302);
+        EXPECT_EQ(r.space_.maxGlobalDofs_, 303);
+        EXPECT_EQ(r.space_.maxDiagnostics_, 304);
+        EXPECT_EQ(r.preparation_.maxCells_, 401);
+        EXPECT_EQ(r.preparation_.maxDofs_, 402);
+        EXPECT_EQ(r.preparation_.maxFacetUses_, 403);
+        EXPECT_EQ(r.preparation_.maxAssociations_, 404);
+        EXPECT_EQ(r.preparation_.maxDiagnostics_, 405);
+        EXPECT_EQ(r.assembly_.limits_.maxDofs_, 501);
+        EXPECT_EQ(r.assembly_.limits_.maxStencils_, 502);
+        EXPECT_EQ(r.assembly_.limits_.maxLocalEntries_, 503);
+        EXPECT_EQ(r.assembly_.limits_.maxNonzeros_, 504);
+        EXPECT_EQ(r.assembly_.gpuLimits_.maxElements_, 601);
+        EXPECT_EQ(r.assembly_.gpuLimits_.maxScalars_, 602);
+        problem::OutputLimits output;
+        r.output_.applyTo(output);
+        EXPECT_EQ(output.maxPoints_, 701);
+        EXPECT_EQ(output.maxCells_, 702);
+        EXPECT_EQ(output.maxHostBytes_, 703);
+        EXPECT_EQ(output.maxDeviceBytes_, 704);
+        EXPECT_EQ(output.maxFrames_, 705);
+        EXPECT_EQ(output.maxMonitors_, 706);
+        EXPECT_EQ(output.maxOutputBytes_, 9007199254740993ULL);
+        EXPECT_EQ(output.batchCells_, 4096);
+        EXPECT_EQ(r.assembly_.batchElements_, 4096);
+        EXPECT_DOUBLE_EQ(r.preparation_.maxCondition_, 1e12);
+    }
+    TEST(ResourceLimitsIO, DefaultsAndFixedParserBudgetRemainIndependent) {
+        std::istringstream defaults(R"({"schemaVersion":1,"output":{}})");
+        const auto r = io::readResourceLimits(defaults);
+        EXPECT_EQ(r.case_.maxValues_, problem::CaseLimits{}.maxValues_);
+        EXPECT_FALSE(r.output_.maxHostBytes_);
+        std::istringstream deep(std::string(129, '[') + std::string(129, ']'));
+        EXPECT_THROW(static_cast<void>(io::readResourceLimits(deep)), std::runtime_error);
+        std::istringstream large(std::string(16 * 1024 * 1024 + 1, ' '));
+        EXPECT_THROW(static_cast<void>(io::readResourceLimits(large)), std::runtime_error);
+        std::istringstream bad;
+        bad.setstate(std::ios::badbit);
+        EXPECT_THROW(static_cast<void>(io::readResourceLimits(bad)), std::runtime_error);
+        EXPECT_THROW(static_cast<void>(io::loadResourceLimits("/nonexistent/limits.json")), std::runtime_error);
     }
     TEST(CaseIO, ReportsMissingFilesBadStreamsAndInvalidCallLimits) {
         EXPECT_TRUE(hasCode(io::loadCase("/nonexistent/case.json").diagnostics_, "IO_ERROR"));

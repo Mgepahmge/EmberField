@@ -81,7 +81,8 @@ def main():
         binary = root / "bin" / args.executable.name
         binary.parent.mkdir()
         shutil.copy2(args.executable, binary)
-        run([binary, "--help"], root)
+        help_text = run([binary, "--help"], root).stdout
+        assert "--resource-limits" in help_text and "--max-values" not in help_text
         run([binary, "--version"], root)
         run([binary], root, expected=None)
         case = root / "plate.multi.json"
@@ -89,6 +90,62 @@ def main():
         run([binary, case], root)
         default = check_directory(binary.parent / "plate.multi", False, args.vtk)
         assert default["frames"][0]["timeS"] is None
+        limits = root / "resource-limits.json"
+        invalid_limits = [
+            '{}', '[]', '{"schemaVersion":2}', '{"schemaVersion":true}',
+            '{"schemaVersion":1,"unknown":{}}',
+            '{"schemaVersion":1,"case":{"maxValues":2,"maxValues":3}}',
+            '{"schemaVersion":1,"schemaVersion":1}',
+            '{"schemaVersion":1} trailing',
+            '{"schemaVersion":1,"case":{"maxValues":9223372036854775808}}',
+        ]
+        for group, field in [("case", "maxValues"), ("mesh", "maxBytes"),
+                             ("space", "maxCells"), ("preparation", "maxCells"),
+                             ("assembly", "maxNonzeros"), ("integration", "maxScalars"),
+                             ("output", "maxOutputBytes")]:
+            invalid_limits += [json.dumps({"schemaVersion": 1, group: value})
+                               for value in [None, [], 1, {"typo": 1}]]
+            invalid_limits += [json.dumps({"schemaVersion": 1, group: {field: value}})
+                               for value in [0, -1, 1.5, 1.0, True, "100", None]]
+        for index, text in enumerate(invalid_limits):
+            limits.write_text(text, encoding="utf-8")
+            directory = root / "results" / f"invalid-{index}"
+            failure = run([binary, case, "--resource-limits", limits,
+                           "--output-root", directory.parent, "--output", directory.name], root, expected=1)
+            assert str(limits) in failure.stderr and not directory.exists()
+        run([binary, case, "--resource-limits", root / "missing.json"], root, expected=None)
+        # Every stage must actually consume its caller-supplied budget.
+        for group, field, code in [("case", "maxValues", 2), ("mesh", "maxBytes", 1),
+                                   ("space", "maxGlobalDofs", 2), ("preparation", "maxDofs", 2),
+                                   ("assembly", "maxDofs", 1), ("integration", "maxScalars", 1),
+                                   ("output", "maxDeviceBytes", 1)]:
+            limits.write_text(json.dumps({"schemaVersion": 1, group: {field: 1}}), encoding="utf-8")
+            run([binary, case, "--resource-limits", limits, "--output-root", root / "results",
+                 "--output", f"limited-{group}"], root, expected=code)
+        # Overrides are merged before validation; unspecified output values remain unchanged.
+        source["output"]["limits"] = {"maxMonitors": 1, "maxFrames": 17}
+        source["output"]["monitors"] = [
+            {"id": "a", "kind": "node", "nodeTag": "5000000001"},
+            {"id": "b", "kind": "node", "nodeTag": "8"},
+        ]
+        case.write_text(json.dumps(source), encoding="utf-8")
+        limits.write_text(json.dumps({"schemaVersion": 1, "case": {"maxValues": 5000000},
+                                      "output": {"maxMonitors": 100}}), encoding="utf-8")
+        run([binary, case, "--resource-limits", limits, "--output-root", root / "results",
+             "--output", "explicit-budget"], root)
+        explicit = check_directory(root / "results/explicit-budget", False, args.vtk)
+        effective = explicit["input"]["effectiveCase"]["output"]["limits"]
+        assert int(effective["maxMonitors"]) == 100 and int(effective["maxFrames"]) == 17
+        del source["output"]["limits"]
+        del source["output"]["monitors"]
+        case.write_text(json.dumps(source), encoding="utf-8")
+        limits.write_text('{"schemaVersion":1}', encoding="utf-8")
+        run([binary, case, "--resource-limits", limits, "--output-root", root / "results",
+             "--output", "default-budget"], root)
+        check_directory(root / "results/default-budget", False, args.vtk)
+        run([binary, case, "--resource-limits", args.cases.resolve().parents[1] / "limits.json",
+             "--output-root", root / "results", "--output", "shipped-example"], root)
+        check_directory(root / "results/shipped-example", False, args.vtk)
         run([binary, case], root, expected=None)
         run([binary, case, "--output", "../escape"], root, expected=None)
         source["analysis"]["type"] = "transient"

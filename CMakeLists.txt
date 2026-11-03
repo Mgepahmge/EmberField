@@ -84,6 +84,7 @@ install(TARGETS emberfield emberfield_cli EXPORT EmberFieldTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.cuh")
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField)
+install(FILES limits.json DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField)
 install(FILES third-party/picojson/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField/picojson)
 install(FILES third-party/CLI11/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField/CLI11)
 install(FILES third-party/CLI11/CLI11.hpp DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party/CLI11)

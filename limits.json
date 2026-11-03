@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "case": {
+    "maxBytes": 16777216,
+    "maxValues": 1000000,
+    "maxStringBytes": 1048576,
+    "maxNesting": 128,
+    "maxSelectorDepth": 64,
+    "maxDiagnostics": 100
+  },
+  "mesh": {
+    "maxRecords": 100000000,
+    "maxBytes": 2147483648
+  },
+  "space": {
+    "maxCells": 1000000,
+    "maxLocalDofs": 4000000,
+    "maxGlobalDofs": 4000000,
+    "maxDiagnostics": 100
+  },
+  "preparation": {
+    "maxCells": 10000000,
+    "maxDofs": 10000000,
+    "maxFacetUses": 40000000,
+    "maxAssociations": 100000000,
+    "maxDiagnostics": 100
+  },
+  "assembly": {
+    "maxDofs": 10000000,
+    "maxStencils": 10000000,
+    "maxLocalEntries": 64000000,
+    "maxNonzeros": 64000000
+  },
+  "integration": {
+    "maxElements": 65536,
+    "maxScalars": 16777216
+  },
+  "output": {
+    "maxPoints": 4000000,
+    "maxCells": 1000000,
+    "maxHostBytes": 1073741824,
+    "maxDeviceBytes": 536870912,
+    "maxFrames": 1000000,
+    "maxMonitors": 1000,
+    "maxOutputBytes": 107374182400
+  }
+}

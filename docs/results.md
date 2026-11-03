@@ -5,6 +5,7 @@
 ```bash
 emberfield case.json
 emberfield case.json --output-root /path/to/results --output plate
+emberfield case.json --resource-limits limits.json
 emberfield --help
 emberfield --version
 ```
@@ -15,8 +16,14 @@ emberfield --version
 覆盖算例中的`output.directory`；求解方法、时间参数、输出内容和覆盖策略仍由配置决定。
 `--output`禁止路径分隔符、`..`、控制字符及系统保留名字。
 
+`--resource-limits`指定统一的资源限制JSON文件。项目根目录提供完整的`limits.json`示例；
+程序不自动加载它。文件可分别设置读取、空间、准备、组装、GPU积分及输出预算，
+省略的字段保留原值。输出预算优先于算例对应字段，其他输出设置仍由算例控制。
+字段、默认值、合并顺序与限制范围见[运行资源限制](resource-limits.md)。
+
 退出码：0成功；2配置、绑定或离散准备失败；3求解不收敛或接受残差失败；
-1资源、后处理或文件错误；130在步边界响应用户中断。参数语法错误使用CLI11退出码。
+1资源、后处理或文件错误；130在步边界响应用户中断。参数语法错误使用CLI11退出码；
+资源配置语法或协议错误返回1，且不创建结果目录。
 帮助及版本查询不初始化CUDA。SIGINT/SIGTERM只设置标志，不在信号处理器中访问CUDA或文件。
 
 ## 输出设置

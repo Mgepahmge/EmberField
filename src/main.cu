@@ -1,10 +1,11 @@
 /**
  * @file main.cu
- * @brief CLI11命令行入口，只接受算例和输出路径选项。
+ * @brief CLI11命令行入口，接受算例、输出路径和统一资源策略文件。
  */
 
 #include <CLI11.hpp>
 #include <IO/Case/CommandLine.cuh>
+#include <IO/Case/ResourceLimits.cuh>
 #include <Simulation/Case/Run.cuh>
 #include <version.cuh>
 
@@ -49,10 +50,11 @@ namespace {
  */
 int main(int argc, char** argv) {
     CLI::App app{"EmberField 热传导有限元求解器"};
-    std::string input, root, name;
+    std::string input, root, name, resourceLimits;
     app.add_option("input", input, "算例配置文件路径")->required()->check(CLI::ExistingFile);
     app.add_option("--output-root", root, "结果目录的保存位置，默认可执行文件目录");
     auto* output = app.add_option("--output", name, "结果目录名，默认算例配置文件名（去扩展名）");
+    app.add_option("--resource-limits", resourceLimits, "分阶段资源限制JSON文件路径")->check(CLI::ExistingFile);
     const auto version = emberfield::version();
     app.set_version_flag("--version",
                          "EmberField " + std::to_string(version.major_) + "." + std::to_string(version.minor_) + "." +
@@ -60,11 +62,13 @@ int main(int argc, char** argv) {
     try {
         argv = app.ensure_utf8(argv);
         app.parse(argc, argv);
+        const auto limits = resourceLimits.empty() ? emberfield::problem::ResourceLimits{}
+                                                   : emberfield::io::loadResourceLimits(resourceLimits);
         const auto directory = emberfield::io::outputDirectory(
             input, root.empty() ? emberfield::io::executableDirectory() : std::filesystem::path(root),
             output->count() ? std::optional<std::string>(name) : std::nullopt);
         SignalGuard guard;
-        return emberfield::problem::runCase(input, directory, &interrupted);
+        return emberfield::problem::runCase(input, directory, &interrupted, limits);
     }
     catch (const CLI::ParseError& e) {
         return app.exit(e);

@@ -58,32 +58,33 @@ namespace emberfield::problem {
         }
     } // namespace
     int runCase(const std::filesystem::path& input, const std::filesystem::path& output,
-                const volatile std::sig_atomic_t* interrupted) {
+                const volatile std::sig_atomic_t* interrupted, const ResourceLimits& limits) {
         const auto started = Clock::now();
         std::unique_ptr<io::ResultArchive> archive;
         bool outputStage = false, solveCompleted = false;
         try {
             auto stage = Clock::now();
-            auto loaded = io::loadCase(input);
+            auto loaded = io::loadCase(input, limits.case_, limits.output_);
             diagnostics(loaded.diagnostics_);
             if (!loaded.definition_) {
                 return 2;
             }
             loaded.definition_->output_.directory_ = std::filesystem::absolute(output).lexically_normal();
-            auto msh = io::loadMsh(loaded.definition_->mesh_.path_);
+            auto msh = io::loadMsh(loaded.definition_->mesh_.path_, limits.mesh_);
             const double inputS = elapsed(stage);
             stage = Clock::now();
-            auto binding = bindCase(*loaded.definition_, std::make_shared<const mesh::Mesh>(std::move(msh.mesh_)));
+            auto binding =
+                bindCase(*loaded.definition_, std::make_shared<const mesh::Mesh>(std::move(msh.mesh_)), limits.case_);
             diagnostics(binding.diagnostics_);
             if (!binding.bound_) {
                 return 2;
             }
-            auto space = buildTemperatureSpace(*binding.bound_);
+            auto space = buildTemperatureSpace(*binding.bound_, limits.space_);
             diagnostics(space.diagnostics_);
             if (!space.space_) {
                 return 2;
             }
-            auto prepared = prepareThermalCase(binding.bound_, space.space_);
+            auto prepared = prepareThermalCase(binding.bound_, space.space_, limits.preparation_);
             diagnostics(prepared.diagnostics());
             if (!prepared.ok()) {
                 return 2;
@@ -91,7 +92,7 @@ namespace emberfield::problem {
             ThermalPostprocessPlan postprocess(prepared.prepared());
             const double preparationS = elapsed(stage);
             stage = Clock::now();
-            auto model = assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared()));
+            auto model = assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared(), limits.assembly_));
             const double assemblyS = elapsed(stage);
             stage = Clock::now();
             outputStage = true;

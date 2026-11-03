@@ -2,6 +2,7 @@
  * @brief 提供严格JSON算例读取，不向公开接口泄露第三方类型。
  */
 #pragma once
+#include <Simulation/Case/ResourceLimits.cuh>
 #include <Simulation/Case/Validation.cuh>
 #include <iosfwd>
 #include <map>
@@ -24,15 +25,18 @@ namespace emberfield::io {
     /** @brief 从流读取严格UTF-8 JSON，使用随项目分发的picojson。
      * @param input 借用输入流。@param baseDirectory 相对文件路径的绝对基目录。
      * @param source 来源名；允许为空。@param limits 加载限额。
+     * @param outputLimits 调用者逐字段输出预算覆盖，在验证算例之前应用。
      * @pre baseDirectory为绝对路径；限额为正。
      * @return 完整定义或诊断；重复键、未知字段、整数精度丢失和非标准JSON均拒绝。
      * @throws std::invalid_argument 非法调用前提；标准分配异常向上传递。
      * @code auto r=readCase(stream,std::filesystem::current_path(),"case.json"); @endcode */
     [[nodiscard]] CaseReadResult readCase(std::istream& input, const std::filesystem::path& baseDirectory,
-                                          std::string source = {}, problem::CaseLimits limits = {});
+                                          std::string source = {}, problem::CaseLimits limits = {},
+                                          const problem::OutputLimitOverrides& outputLimits = {});
     /** @brief 以配置文件所在目录为基准加载，不依赖运行目录解析内部路径。
-     * @param path 配置路径。@param limits 限额。@pre 限额为正。
+     * @param path 配置路径。@param limits 限额。@param outputLimits 验证前的输出预算覆盖。@pre 限额为正。
      * @return 定义或包含IO_ERROR的诊断；不加载网格、不创建输出目录。
      * @code auto r=loadCase("cases/plate.json"); @endcode */
-    [[nodiscard]] CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits = {});
+    [[nodiscard]] CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits = {},
+                                          const problem::OutputLimitOverrides& outputLimits = {});
 } // namespace emberfield::io

@@ -2,6 +2,7 @@
  * @brief 适配picojson的限额/重复键校验回调，执行类型化协议转换。
  */
 #include <IO/Case/Case.cuh>
+#include <IO/Case/ResourceLimits.cuh>
 #define PICOJSON_USE_INT64
 #include <algorithm>
 #include <charconv>
@@ -291,7 +292,99 @@ namespace emberfield::io {
              * @return 类型化定义；失败抛InputFailure。@code auto c=decode(root); @endcode */
             CaseDefinition decode(const Json& root);
 
+            /** @brief 解码版本化的分阶段资源策略。@param root 严格解析的JSON。
+             * @pre 无。@return 完整候选策略；未知键、非法类型和非正数抛InputFailure。
+             * @code auto limits=decoder.resourceLimits(root); @endcode */
+            ResourceLimits resourceLimits(const Json& root) {
+                object(root, "",
+                       {"schemaVersion", "case", "mesh", "space", "preparation", "assembly", "integration", "output"});
+                if (integer(required(root, "schemaVersion", ""), "/schemaVersion") != 1) {
+                    fail("UNSUPPORTED_VERSION", "/schemaVersion", "资源文件仅支持schemaVersion=1");
+                }
+                ResourceLimits result;
+                budgetGroup(root, "case",
+                            {{"maxBytes", &result.case_.maxBytes_},
+                             {"maxValues", &result.case_.maxValues_},
+                             {"maxStringBytes", &result.case_.maxStringBytes_},
+                             {"maxNesting", &result.case_.maxNesting_},
+                             {"maxSelectorDepth", &result.case_.maxSelectorDepth_},
+                             {"maxDiagnostics", &result.case_.maxDiagnostics_}});
+                budgetGroup(root, "mesh",
+                            {{"maxRecords", &result.mesh_.maxRecords_}, {"maxBytes", &result.mesh_.maxBytes_}});
+                budgetGroup(root, "space",
+                            {{"maxCells", &result.space_.maxCells_},
+                             {"maxLocalDofs", &result.space_.maxLocalDofs_},
+                             {"maxGlobalDofs", &result.space_.maxGlobalDofs_},
+                             {"maxDiagnostics", &result.space_.maxDiagnostics_}});
+                budgetGroup(root, "preparation",
+                            {{"maxCells", &result.preparation_.maxCells_},
+                             {"maxDofs", &result.preparation_.maxDofs_},
+                             {"maxFacetUses", &result.preparation_.maxFacetUses_},
+                             {"maxAssociations", &result.preparation_.maxAssociations_},
+                             {"maxDiagnostics", &result.preparation_.maxDiagnostics_}});
+                budgetGroup(root, "assembly",
+                            {{"maxDofs", &result.assembly_.limits_.maxDofs_},
+                             {"maxStencils", &result.assembly_.limits_.maxStencils_},
+                             {"maxLocalEntries", &result.assembly_.limits_.maxLocalEntries_},
+                             {"maxNonzeros", &result.assembly_.limits_.maxNonzeros_}});
+                budgetGroup(root, "integration",
+                            {{"maxElements", &result.assembly_.gpuLimits_.maxElements_},
+                             {"maxScalars", &result.assembly_.gpuLimits_.maxScalars_}});
+                if (has(root, "output")) {
+                    const auto& value = root.get("output");
+                    object(value, "/output",
+                           {"maxPoints", "maxCells", "maxHostBytes", "maxDeviceBytes", "maxFrames", "maxMonitors",
+                            "maxOutputBytes"});
+                    optionalBudget(value, "maxPoints", result.output_.maxPoints_);
+                    optionalBudget(value, "maxCells", result.output_.maxCells_);
+                    optionalBudget(value, "maxHostBytes", result.output_.maxHostBytes_);
+                    optionalBudget(value, "maxDeviceBytes", result.output_.maxDeviceBytes_);
+                    optionalBudget(value, "maxFrames", result.output_.maxFrames_);
+                    optionalBudget(value, "maxMonitors", result.output_.maxMonitors_);
+                    optionalBudget(value, "maxOutputBytes", result.output_.maxOutputBytes_);
+                }
+                return result;
+            }
+
         private:
+            /** @brief 将已知计数字段写入候选原生策略。@param root 根对象。@param name 分组名。
+             * @param fields 协议名字与存活目标地址。@pre root为对象且目标非空。
+             * @note 无返回值；未知键和非法预算抛InputFailure。@code budgetGroup(root,"mesh",fields); @endcode */
+            void budgetGroup(const Json& root, const std::string& name,
+                             std::initializer_list<std::pair<std::string_view, std::size_t*>> fields) {
+                if (!has(root, name)) {
+                    return;
+                }
+                const auto& value = root.get(name);
+                const auto path = "/" + name;
+                if (!value.is<picojson::object>()) {
+                    fail("INVALID_TYPE", path, "必须为对象");
+                }
+                for (const auto& [key, entry] : value.get<picojson::object>()) {
+                    const auto field = std::find_if(fields.begin(), fields.end(),
+                                                    [&](const std::pair<std::string_view, std::size_t*>& candidate) {
+                                                        return candidate.first == key;
+                                                    });
+                    if (field == fields.end()) {
+                        fail("UNKNOWN_FIELD", path + "/" + escapeKey(key), "未知资源字段");
+                    }
+                    *field->second = positive(entry, path + "/" + key);
+                }
+            }
+            /** @brief 保留输出预算的缺省状态。@tparam T 无符号整型。
+             * @param value 输出对象。@param key 字段名。@param target 覆盖目标。
+             * @pre value为对象。@note 无返回值；非法值抛InputFailure。
+             * @code optionalBudget(value,"maxFrames",result.maxFrames_); @endcode */
+            template <std::unsigned_integral T>
+            void optionalBudget(const Json& value, const std::string& key, std::optional<T>& target) {
+                if (has(value, key)) {
+                    const auto number = integer(value.get(key), "/output/" + key);
+                    if (number <= 0 || static_cast<std::uint64_t>(number) > std::numeric_limits<T>::max()) {
+                        fail("INVALID_VALUE", "/output/" + key, "必须为可表示的正整数");
+                    }
+                    target = static_cast<T>(number);
+                }
+            }
             /** @brief 检查对象类型与未知键。@param v JSON节点。@param p 路径。
              * @param allowed 合法字段集合。@pre 无。@note 无返回值，非法抛InputFailure。
              * @code object(v,p,{"kind"}); @endcode */
@@ -849,7 +942,7 @@ namespace emberfield::io {
         }
     } // namespace
     CaseReadResult readCase(std::istream& input, const std::filesystem::path& baseDirectory, std::string source,
-                            problem::CaseLimits limits) {
+                            problem::CaseLimits limits, const problem::OutputLimitOverrides& outputLimits) {
         problem::validateLimits(limits);
         if (!baseDirectory.is_absolute()) {
             throw std::invalid_argument("配置基目录必须为绝对路径");
@@ -886,6 +979,7 @@ namespace emberfield::io {
             }
             Decoder decoder;
             auto definition = decoder.decode(root);
+            outputLimits.applyTo(definition.output_.limits_);
             if (definition.analysis_.type_ == problem::AnalysisType::Transient) {
                 if (!definition.output_.everySteps_) {
                     definition.output_.everySteps_ = 1;
@@ -943,7 +1037,8 @@ namespace emberfield::io {
         }
         return result;
     }
-    CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits) {
+    CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits,
+                            const problem::OutputLimitOverrides& outputLimits) {
         problem::validateLimits(limits);
         std::error_code ec;
         const auto absolute = std::filesystem::absolute(path, ec);
@@ -962,6 +1057,56 @@ namespace emberfield::io {
                                      {}});
             return result;
         }
-        return readCase(input, absolute.parent_path(), absolute.string(), limits);
+        return readCase(input, absolute.parent_path(), absolute.string(), limits, outputLimits);
+    }
+
+    problem::ResourceLimits readResourceLimits(std::istream& input, std::string source) {
+        const CaseLimits parserLimits;
+        std::string text;
+        std::map<std::string, SourceLocation> locations;
+        try {
+            char buffer[4096];
+            while (input) {
+                input.read(buffer, sizeof(buffer));
+                const auto count = static_cast<std::size_t>(input.gcount());
+                if (count > parserLimits.maxBytes_ - text.size()) {
+                    throw InputFailure{"RESOURCE_LIMIT", "", "资源配置字节数超过解析限额", {}};
+                }
+                text.append(buffer, count);
+            }
+            if (input.bad() || (input.fail() && !input.eof())) {
+                throw InputFailure{"IO_ERROR", "", "读取资源配置失败", {}};
+            }
+            lexicalCheck(text);
+            Json root;
+            ParseState state{parserLimits, text, source, locations};
+            state.enter("", 1, 0);
+            StrictContext context(root, state, "", 1);
+            picojson::input<std::string::const_iterator> parsed(text.cbegin(), text.cend());
+            if (!picojson::_parse(context, parsed)) {
+                throw InputFailure{"JSON_SYNTAX", "", "资源配置JSON语法错误",
+                                   static_cast<std::size_t>(parsed.cur() - text.cbegin())};
+            }
+            parsed.skip_ws();
+            if (parsed.getc() != -1) {
+                throw InputFailure{"JSON_SYNTAX", "", "根值之后存在多余内容", {}};
+            }
+            return Decoder{}.resourceLimits(root);
+        }
+        catch (const InputFailure& failure) {
+            const auto found = locations.find(failure.path_);
+            const auto pos = failure.offset_
+                ? location(text, *failure.offset_, source)
+                : (found != locations.end() ? found->second : SourceLocation{source, 1, 1});
+            throw std::runtime_error(source + ":" + std::to_string(pos.line_) + ":" + std::to_string(pos.column_) +
+                                     ": " + failure.code_ + " " + failure.path_ + ": " + failure.message_);
+        }
+    }
+    problem::ResourceLimits loadResourceLimits(const std::filesystem::path& path) {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            throw std::runtime_error(path.string() + ": IO_ERROR: 无法打开资源配置");
+        }
+        return readResourceLimits(input, path.string());
     }
 } // namespace emberfield::io
