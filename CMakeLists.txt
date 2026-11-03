@@ -83,6 +83,7 @@ install(TARGETS emberfield emberfield_cli EXPORT EmberFieldTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.cuh")
+install(DIRECTORY example/cases/ DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/examples/cases)
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField)
 install(FILES limits.json DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField)
 install(PROGRAMS scripts/convert_case.py DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/scripts)

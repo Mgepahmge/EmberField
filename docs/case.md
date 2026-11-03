@@ -10,7 +10,7 @@
 
 配置为UTF-8 JSON，`schemaVersion`必填整数1；字段和枚举区分大小写。拒绝重复键（含转义后同名）、未知字段、非整数标签和非法数字语法。所有JSON整数字面量须在int64范围内，越界不回退浮点。默认限额为16MiB、1000000值、1MiB单字符串、128层JSON、64层选择器、100条诊断；调用者可通过`CaseLimits`调整，限额不能为0。
 
-原件完整示例为`example/cases/steady.json`和`transient.json`，其网格为同目录`plate.msh`。相对网格/输出路径基于配置文件目录，不执行环境变量和命令替换。
+原生算例快速运行指南见[原生算例示例](native-case-example.md)。完整示例为`example/cases/steady.json`和`transient.json`，其网格为同目录`plate.msh`。相对网格/输出路径基于配置文件目录，不执行环境变量和命令替换。
 
 | 根字段 | 语义及默认 |
 | --- | --- |
