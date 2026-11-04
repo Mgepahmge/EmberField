@@ -7,19 +7,106 @@
 #include <Simulation/Case/System.cuh>
 #include <Solver/Iterative/BiCgStab.cuh>
 #include <Solver/Iterative/Cg.cuh>
+#include <algorithm>
 #include <chrono>
+#include <climits>
+#include <cmath>
+#include <filesystem>
+#include <iomanip>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <utility>
 namespace emberfield::problem {
     namespace {
         using Clock = std::chrono::steady_clock;
         /** @brief 完成阶段墙钟秒数。@param start 起点。@pre 单调时钟。@return 秒数。@code auto t=elapsed(start);
          * @endcode */
         double elapsed(Clock::time_point start) { return std::chrono::duration<double>(Clock::now() - start).count(); }
-        /** @brief 输出输入诊断。@param d 诊断。@pre 无。@note 无返回值。@code diagnostics(d); @endcode */
+        /** @brief 输出带严重性和定位信息的输入诊断。
+         * @param d 诊断集合。@pre 无。@note 无返回值，文本不作为机器协议。
+         * @code diagnostics(d); @endcode */
         void diagnostics(const Diagnostics& d) {
             for (const auto& x : d.entries()) {
-                std::cerr << x.code_ << ": " << x.message_ << '\n';
+                std::cerr << (x.severity_ == Severity::Error ? "[错误] " : "[警告] ") << x.code_ << ": " << x.message_;
+                if (!x.path_.empty()) {
+                    std::cerr << " (" << x.path_ << ')';
+                }
+                if (!x.source_.empty()) {
+                    std::cerr << " @ " << x.source_;
+                    if (x.line_) {
+                        std::cerr << ':' << *x.line_;
+                        if (x.column_) {
+                            std::cerr << ':' << *x.column_;
+                        }
+                    }
+                }
+                std::cerr << '\n';
+                if (!x.suggestion_.empty()) {
+                    std::cerr << "         建议: " << x.suggestion_ << '\n';
+                }
             }
+            if (d.omitted() != 0) {
+                std::cerr << "[提示] 还有 " << d.omitted() << " 条诊断未显示，请调整诊断预算\n";
+            }
+        }
+        /** @brief 输出成功准备的算例与矩阵规模。
+         * @param input 配置路径。@param binding 活动网格与定义。@param model 已组装模型。
+         * @pre binding和model同源。@note 无返回值。
+         * @code printCaseSummary(input,bound.data(),model); @endcode */
+        void printCaseSummary(const std::filesystem::path& input, const BindingData& binding,
+                              const AssembledThermalModel& model) {
+            const auto& c = binding.definition_;
+            std::cout << "[算例] " << (c.name_.empty() ? input.stem().string() : c.name_) << '\n'
+                      << "  分析         " << (c.analysis_.type_ == AnalysisType::Steady ? "稳态" : "瞬态") << " / "
+                      << (c.analysis_.space_ == SpaceModel::Planar2d ? "二维平面" : "三维实体") << '\n'
+                      << "  网格         " << c.mesh_.path_.string() << '\n'
+                      << "  规模         " << binding.mesh_->data().nodes_.size() << " 节点 / "
+                      << binding.active_.size() << " 活动单元 / " << model.spatial().rowCount() << " DOF / "
+                      << model.spatial().nonZeroCount() << " nnz\n"
+                      << "  求解器       " << (c.linearSolver_.method_ == LinearMethod::Cg ? "CG" : "BiCGStab")
+                      << " + Identity, rtol=" << c.linearSolver_.relativeTolerance_
+                      << ", atol=" << c.linearSolver_.absoluteTolerance_ << '\n';
+            if (c.time_) {
+                std::cout << "  时间         [" << c.time_->start_ << ", " << c.time_->end_
+                          << "] s, dt=" << c.time_->step_ << " s (后向 Euler)\n";
+            }
+            std::cout << "\n[进度] 温度范围单位 K；完整逐步记录见 steps.csv\n" << std::flush;
+        }
+        /** @brief 根据预计步数控制终端进度频率。
+         * @param options 已验证的时间选项。@pre 时间区间和步长有效。
+         * @return 大约每二十四分之一进度的步长，小算例每步展示。
+         * @code auto stride=reportStride(time); @endcode */
+        std::size_t reportStride(const TimeOptions& options) {
+            const auto span = static_cast<long double>(options.end_) - static_cast<long double>(options.start_);
+            const auto count = std::ceil(span / static_cast<long double>(options.step_));
+            const auto capped = std::min(count, static_cast<long double>(options.maxSteps_));
+            return std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(capped / 24)));
+        }
+        /** @brief 展示已发布状态的简短进度，不替代结构化结果。
+         * @param record 状态记录。@param minimumK 最低温度。@param maximumK 最高温度。
+         * @pre 数值有限且状态已发布。@note 无返回值。
+         * @code printProgress(record,minK,maxK); @endcode */
+        void printProgress(const io::StepRecord& record, double minimumK, double maximumK) {
+            std::ostringstream line;
+            line << "  [" << std::setw(6) << record.step_ << "]";
+            if (record.time_) {
+                line << " t=" << std::scientific << std::setprecision(3) << *record.time_ << " s";
+            }
+            if (record.solve_) {
+                line << "  iter=" << record.solve_->iterations_;
+            }
+            if (record.acceptedResidual_) {
+                line << "  |r|=" << std::scientific << std::setprecision(3) << *record.acceptedResidual_;
+            }
+            line << "  T=[" << std::fixed << std::setprecision(3) << minimumK << ", " << maximumK << "]";
+            if (record.kind_ == "initial") {
+                line << "  初态";
+            }
+            std::cout << line.str() << '\n' << std::flush;
         }
         /** @brief 创建运行时求解器。@param o 已验证配置。@pre 迭代数可表示int。@return 独占求解器。@code auto
          * s=solver(o); @endcode */
@@ -63,6 +150,7 @@ namespace emberfield::problem {
         std::unique_ptr<io::ResultArchive> archive;
         bool outputStage = false, solveCompleted = false;
         try {
+            std::cout << "[准备] 读取算例与网格\n" << std::flush;
             auto stage = Clock::now();
             auto loaded = io::loadCase(input, limits.case_, limits.output_);
             diagnostics(loaded.diagnostics_);
@@ -72,6 +160,7 @@ namespace emberfield::problem {
             loaded.definition_->output_.directory_ = std::filesystem::absolute(output).lexically_normal();
             auto msh = io::loadMsh(loaded.definition_->mesh_.path_, limits.mesh_);
             const double inputS = elapsed(stage);
+            std::cout << "[准备] 绑定区域并建立温度自由度\n" << std::flush;
             stage = Clock::now();
             auto binding =
                 bindCase(*loaded.definition_, std::make_shared<const mesh::Mesh>(std::move(msh.mesh_)), limits.case_);
@@ -91,9 +180,11 @@ namespace emberfield::problem {
             }
             ThermalPostprocessPlan postprocess(prepared.prepared());
             const double preparationS = elapsed(stage);
+            std::cout << "[准备] 计算单元贡献并组装稀疏矩阵\n" << std::flush;
             stage = Clock::now();
             auto model = assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared(), limits.assembly_));
             const double assemblyS = elapsed(stage);
+            std::cout << "[准备] 创建结果目录\n" << std::flush;
             stage = Clock::now();
             outputStage = true;
             archive = std::make_unique<io::ResultArchive>(output, input, model, postprocess);
@@ -116,7 +207,9 @@ namespace emberfield::problem {
             double outputS = elapsed(stage), setupS = 0, solveS = 0, postprocessS = 0;
             const auto& c = binding.bound_->data().definition_;
             const auto& constraints = prepared.prepared()->conditions()->constraints();
-            std::cout << "DOF=" << model.spatial().rowCount() << " nnz=" << model.spatial().nonZeroCount() << '\n';
+            printCaseSummary(input, binding.bound_->data(), model);
+            const auto stride = c.time_ ? reportStride(*c.time_) : 1;
+            std::size_t completedSteps = 0;
             // 候选经规定值投影和真实残差复核后才接受；历史状态保留至后处理完成。
             auto advance = [&](const systems::LinearSystem& system, const Vector<double>* previous,
                                io::StepRecord record, bool final) -> std::optional<Vector<double>> {
@@ -151,6 +244,7 @@ namespace emberfield::problem {
                         archive->publishStep(record, nullptr, false);
                         archive->finish(false, record.errorCode_, "线性求解未收敛");
                         outputStage = false;
+                        std::cerr << "[错误] 第 " << record.step_ << " 步线性求解未收敛 (" << record.status_ << ")\n";
                         return {};
                     }
                     candidate =
@@ -172,6 +266,7 @@ namespace emberfield::problem {
                         archive->publishStep(record, nullptr, false);
                         archive->finish(false, record.errorCode_, "规定温度投影后真实残差未达标");
                         outputStage = false;
+                        std::cerr << "[错误] 第 " << record.step_ << " 步接受残差未达标\n";
                         return {};
                     }
                     archive->accepted(record.step_, record.time_);
@@ -186,9 +281,9 @@ namespace emberfield::problem {
                     archive->publishStep(record, &fields, saveFrame);
                     outputS += elapsed(tick);
                     outputStage = false;
-                    std::cout << "step=" << record.step_ << " iterations=" << record.solve_->iterations_
-                              << " residual=" << *record.acceptedResidual_ << " temperature[K]=[" << fields.minimumK_
-                              << ", " << fields.maximumK_ << "]\n";
+                    if (!c.time_ || record.step_ == 1 || final || record.step_ % stride == 0) {
+                        printProgress(record, fields.minimumK_, fields.maximumK_);
+                    }
                     return candidate;
                 }
                 catch (...) {
@@ -202,7 +297,7 @@ namespace emberfield::problem {
                             outputStage = false;
                         }
                         catch (const std::exception& failure) {
-                            std::cerr << "记录失败尝试失败: " << failure.what() << '\n';
+                            std::cerr << "[错误] 记录失败尝试失败: " << failure.what() << '\n';
                         }
                     }
                     throw;
@@ -234,6 +329,7 @@ namespace emberfield::problem {
                 archive->publishStep(record, &fields, saveInitial);
                 outputS += elapsed(stage);
                 outputStage = false;
+                printProgress(record, fields.minimumK_, fields.maximumK_);
                 while (auto step = nextTimeStep(*c.time_, time, completed)) {
                     record = io::StepRecord{};
                     record.step_ = step->index_;
@@ -247,6 +343,7 @@ namespace emberfield::problem {
                     previous = std::move(*next);
                     time = step->end_;
                     completed = step->index_;
+                    completedSteps = completed;
                 }
             }
             solveCompleted = true;
@@ -258,11 +355,17 @@ namespace emberfield::problem {
             outputStage = true;
             archive->finish(true);
             outputStage = false;
-            std::cout << "结果目录: " << output.string() << '\n';
+            std::cout << "\n[完成] " << (c.time_ ? "瞬态" : "稳态");
+            if (c.time_) {
+                std::cout << "，共 " << completedSteps << " 步";
+            }
+            std::cout << "\n  用时         " << std::fixed << std::setprecision(3) << elapsed(started) << " s\n"
+                      << "  结果         " << output.string() << "\n"
+                      << "  摘要         " << (output / "run-summary.json").string() << '\n';
             return 0;
         }
         catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
+            std::cerr << "[错误] " << e.what() << '\n';
             if (archive) {
                 try {
                     archive->timing("total", elapsed(started));
@@ -274,7 +377,7 @@ namespace emberfield::problem {
                                     e.what(), outputStage, cancelled);
                 }
                 catch (const std::exception& nested) {
-                    std::cerr << "终结摘要失败: " << nested.what() << '\n';
+                    std::cerr << "[错误] 终结摘要失败: " << nested.what() << '\n';
                 }
             }
             return interrupted && *interrupted ? 130 : 1;

@@ -1,5 +1,7 @@
 # EmberField
 
+中文 | [English](README.en.md)
+
 EmberField 是本科毕业设计“基于有限元的热力学仿真求解器设计与实现”的代码项目，采用 CUDA 和 C++20 开发。
 
 ## 项目目标
@@ -67,7 +69,7 @@ cmake -S . -B build \
   -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/path/to/googletest
 ```
 
-`emberfield <算例.json> [--output-root 路径] [--output 目录名]` 加载算例、求解并生成结果文件夹。`output-root` 默认是可执行文件所在目录，`output` 默认是算例配置文件名去掉扩展名；两者组合为最终输出目录，覆盖配置中的 `output.directory`。完整配置及输出字段见用户文档。
+`emberfield <算例.json> [--output-root 路径] [--output 目录名]` 加载算例、求解并生成结果文件夹。`output-root` 默认是可执行文件所在目录，`output` 默认是算例配置文件名去掉扩展名；两者组合为最终输出目录，覆盖配置中的 `output.directory`。完整配置、资源策略及公共 API 见[用户手册](docs/user-guide.md)。
 
 ## 安装
 

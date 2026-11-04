@@ -83,11 +83,17 @@ def main():
         shutil.copy2(args.executable, binary)
         help_text = run([binary, "--help"], root).stdout
         assert "--resource-limits" in help_text and "--max-values" not in help_text
-        run([binary, "--version"], root)
+        assert "E M B E R F I E L D" not in help_text
+        version_text = run([binary, "--version"], root).stdout
+        assert "EmberField 0.1.0" in version_text and "GPU" not in version_text
         run([binary], root, expected=None)
         case = root / "plate.multi.json"
         case.write_text(json.dumps(source), encoding="utf-8")
-        run([binary, case], root)
+        steady_run = run([binary, case], root)
+        assert "E M B E R F I E L D" in steady_run.stdout
+        assert "GPU" in steady_run.stdout and "CUDA" in steady_run.stdout
+        assert "[准备]" in steady_run.stdout and "[算例]" in steady_run.stdout
+        assert "[进度]" in steady_run.stdout and "[完成]" in steady_run.stdout
         default = check_directory(binary.parent / "plate.multi", False, args.vtk)
         assert default["frames"][0]["timeS"] is None
         limits = root / "resource-limits.json"
@@ -156,7 +162,9 @@ def main():
         source["output"].update({"encoding": "appendedRaw", "includeInitial": False, "includeFinal": True,
                                   "schedule": {"kind": "everySteps", "interval": 2}})
         case.write_text(json.dumps(source), encoding="utf-8")
-        run([binary, case, "--output-root", root / "results", "--output", "transient"], root)
+        transient_run = run([binary, case, "--output-root", root / "results", "--output", "transient"], root)
+        assert "瞬态，共 3 步" in transient_run.stdout
+        assert "[     0]" in transient_run.stdout and "[     3]" in transient_run.stdout
         transient = check_directory(root / "results/transient", True, args.vtk)
         assert [int(f["step"]) for f in transient["frames"]] == [2, 3]
         with (root / "results/transient/steps.csv").open(newline="") as stream:
