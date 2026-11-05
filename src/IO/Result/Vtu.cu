@@ -2,6 +2,7 @@
  * @brief 实现受检的ASCII和小端UInt64块头原始追加VTU编码。
  */
 #include <IO/Result/Vtu.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -74,6 +75,7 @@ namespace emberfield::io {
          * @param s 快照。@pre 来源有效。@note 无返回值；非法invalid_argument。
          * @code validate(s); @endcode */
         void validate(const field::FieldSnapshot& s) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::validate", emberfield::NvtxColor::Orange);
             const auto& g = *s.grid();
             const auto& t = require(s.pointFields(), "temperature", 4, 1);
             if (t.unit_ != "K") {
@@ -192,6 +194,7 @@ namespace emberfield::io {
          * @pre 已完整校验。@note 无返回值，写失败抛IO异常。
          * @code writeValues(s,p,g,true); @endcode */
         void writeValues(std::ostream& stream, const Payload& p, const field::VisualizationGrid& g, bool binary) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writeValues", emberfield::NvtxColor::Orange);
             Emitter out(stream, binary);
             if (binary) {
                 out.scalar(p.bytes_);
@@ -235,6 +238,7 @@ namespace emberfield::io {
         }
     } // namespace
     void writeVtu(std::ostream& stream, const field::FieldSnapshot& s, VtuEncoding encoding) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writeVtu", emberfield::NvtxColor::Orange);
         if (encoding != VtuEncoding::Ascii && encoding != VtuEncoding::AppendedRaw) {
             throw std::invalid_argument("未知VTU编码");
         }

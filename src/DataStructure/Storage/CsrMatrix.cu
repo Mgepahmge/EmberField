@@ -2,6 +2,7 @@
  * @brief 验证 GPU 生成的 CSR 缓冲区，避免全量主机往返。
  */
 #include <DataStructure/Storage/CsrMatrix.cuh>
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 namespace emberfield::detail {
     /** @brief 提供 CSR 结构校验内核。 */
@@ -32,6 +33,7 @@ namespace emberfield::detail {
     } // namespace
     void validateDeviceCsr(std::size_t rows, std::size_t columns, std::size_t count, const void* offsets,
                            const void* indices, bool wide, int device) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::validateDeviceCsr", emberfield::NvtxColor::SkyBlue);
         linalg::detail::OperationScope scope(device);
         CudaBuffer<int> bad(1);
         auto check = [](cudaError_t status) {

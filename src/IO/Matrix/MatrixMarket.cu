@@ -2,6 +2,7 @@
  * @brief 校验 Matrix Market 文件并将坐标条目整理为主机 CSR。
  */
 #include <IO/Matrix/MatrixMarket.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -33,6 +34,7 @@ namespace emberfield::io {
         }
     } // namespace
     HostCsr readMatrixMarket(std::istream& input) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::readMatrixMarket", emberfield::NvtxColor::Orange);
         std::string line, banner, object, format, field, symmetry;
         if (!std::getline(input, line)) {
             throw std::runtime_error("Missing Matrix Market header");

@@ -1,6 +1,7 @@
 /** @file IterationContext.cu
  * @brief 实现缓存句柄、SpMV 描述符及 Jacobi CUDA 更新内核。
  */
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <cmath>
 #include <cublas_v2.h>
@@ -50,6 +51,8 @@ namespace emberfield::linalg {
          */
         explicit Impl(const CsrMatrix<T, I>& matrix) :
             matrix_(detail::canonical<I>(matrix)), input_(matrix.columnCount()), output_(matrix.rowCount()) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::Impl::Impl",
+                                        emberfield::NvtxColor::Cyan);
             check(cudaGetDevice(&device_));
             for (auto value : detail::hostCopy(matrix_.values())) {
                 if (!std::isfinite(value)) {
@@ -86,6 +89,8 @@ namespace emberfield::linalg {
          * @code state.release(); @endcode
          */
         void release() noexcept {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::Impl::release",
+                                        emberfield::NvtxColor::Cyan);
             if (y_) {
                 cusparseDestroyDnVec(y_);
             }
@@ -138,6 +143,8 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::multiply(const Vector<T>& x, Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::multiply",
+                                    emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         impl_->validate(y);
         if (x.size() != impl_->matrix_.columnCount() || y.size() != impl_->matrix_.rowCount() ||
@@ -159,12 +166,15 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::clear(Vector<T>& x) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::clear", emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         detail::OperationScope scope(impl_->device_);
         detail::zero(x.deviceData(), x.size());
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::residual(const Vector<T>& rhs, const Vector<T>& x, Vector<T>& out) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::residual",
+                                    emberfield::NvtxColor::Cyan);
         impl_->validate(rhs);
         if (rhs.size() != out.size() || (rhs.size() && rhs.data() == out.data())) {
             throw std::invalid_argument("Residual shape or alias mismatch");
@@ -175,6 +185,7 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::axpy(T alpha, const Vector<T>& x, Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::axpy", emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         impl_->validate(y);
         if (x.size() != y.size()) {
@@ -196,6 +207,7 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::scale(T alpha, Vector<T>& x) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::scale", emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         if (x.empty()) {
             return;
@@ -211,6 +223,7 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     T IterationContext<T, I>::dot(const Vector<T>& x, const Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::dot", emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         impl_->validate(y);
         if (x.size() != y.size()) {
@@ -233,6 +246,7 @@ namespace emberfield::linalg {
     }
     template <Scalar T, CsrIndex I>
     T IterationContext<T, I>::norm(const Vector<T>& x) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::norm", emberfield::NvtxColor::Cyan);
         impl_->validate(x);
         T result{};
         if (x.empty()) {
@@ -250,6 +264,7 @@ namespace emberfield::linalg {
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::jacobi(T weight, const Vector<T>& inverse, const Vector<T>& rhs,
                                         const Vector<T>& product, Vector<T>& x) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::jacobi", emberfield::NvtxColor::Cyan);
         impl_->validate(inverse);
         impl_->validate(rhs);
         impl_->validate(product);

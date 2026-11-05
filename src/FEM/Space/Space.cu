@@ -2,6 +2,7 @@
  * @brief 实现按活动顶点身份确定性编号的连续P1空间，不进行物理或几何处理。
  */
 #include <FEM/Space/Space.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -60,6 +61,7 @@ namespace emberfield::fem {
     SpaceBuildResult buildFiniteElementSpace(std::shared_ptr<const mesh::Mesh> mesh,
                                              std::span<const mesh::CellRef> active,
                                              std::span<const ElementKey> elements, SpaceLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::fem::buildFiniteElementSpace", emberfield::NvtxColor::Green);
         if (!limits.maxCells_ || !limits.maxLocalDofs_ || !limits.maxGlobalDofs_ || !limits.maxDiagnostics_) {
             throw std::invalid_argument("空间构建限额必须为正");
         }

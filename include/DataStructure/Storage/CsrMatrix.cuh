@@ -4,6 +4,7 @@
 #pragma once
 
 #include <DataStructure/Storage/CudaBuffer.cuh>
+#include <NVTXProfiler.cuh>
 
 #include <cstdint>
 #include <limits>
@@ -51,6 +52,7 @@ namespace emberfield {
          * @code auto a = CsrMatrix<double>::fromBuffers(n,n,std::move(rp),std::move(ci),std::move(v)); @endcode */
         static CsrMatrix fromBuffers(std::size_t rows, std::size_t columns, CudaBuffer<Index>&& offsets,
                                      CudaBuffer<Index>&& indices, CudaBuffer<T>&& values) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::CsrMatrix::fromBuffers", emberfield::NvtxColor::SkyBlue);
             if (!std::in_range<Index>(rows) || !std::in_range<Index>(columns) || !std::in_range<Index>(values.size()) ||
                 rows == std::numeric_limits<std::size_t>::max()) {
                 throw std::length_error("CSR dimensions exceed index range");
@@ -188,6 +190,7 @@ namespace emberfield {
          */
         static void validate(std::size_t rows, std::size_t columns, std::span<const Index> offsets,
                              std::span<const Index> indices, std::size_t count) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::CsrMatrix::validate", emberfield::NvtxColor::SkyBlue);
             if (!std::in_range<Index>(rows) || !std::in_range<Index>(columns) || !std::in_range<Index>(count) ||
                 rows == std::numeric_limits<std::size_t>::max()) {
                 throw std::length_error("CSR dimensions exceed the index range");

@@ -2,6 +2,7 @@
  * @brief 实现有界MSH解析与ASCII/二进制编码，保持标签和网格索引分离。
  */
 #include <IO/Mesh/Msh.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -181,6 +182,7 @@ namespace emberfield::io {
         /** @brief 读取原始或分区实体。@param r 读取器。@param d 构建数据。@param partitioned 分区段。
          * @pre 在段开始之后。@note 无返回值。@code entities(r,d,false); @endcode */
         void entities(Reader& r, MeshData& d, bool partitioned) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::entities", emberfield::NvtxColor::Orange);
             if (partitioned) {
                 const auto partitions = r.count();
                 if (d.partitionCount_ && d.partitionCount_ != partitions) {
@@ -245,6 +247,7 @@ namespace emberfield::io {
         /** @brief 读取完整物理组命名段。@param r 读取器。@param d 数据。
          * @pre 此段始终ASCII。@note 无返回值。@code physical(r,d); @endcode */
         void physical(Reader& r, MeshData& d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::physical", emberfield::NvtxColor::Orange);
             std::istringstream count(r.line());
             Tag n;
             char extra;
@@ -293,6 +296,7 @@ namespace emberfield::io {
         /** @brief 读取节点段并保存标签，尚不解析单元引用。@param r 读取器。@param d 数据。
          * @pre 在Nodes标记之后。@note 无返回值。@code nodes(r,d); @endcode */
         void nodes(Reader& r, MeshData& d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::nodes", emberfield::NvtxColor::Orange);
             if (r.version_ == "2.2") {
                 // 旧版段的计数为ASCII，二进制节点记录使用int标签。
                 std::istringstream header(r.line());
@@ -392,6 +396,7 @@ namespace emberfield::io {
          * @param d 数据。@param document 文件元数据。@pre 节点可在之后出现。
          * @note 无返回值。@code elements(r,d,doc); @endcode */
         void elements(Reader& r, MeshData& d, MshDocument& document) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::elements", emberfield::NvtxColor::Orange);
             if (r.version_ == "2.2") {
                 std::istringstream header(r.line());
                 Tag total;
@@ -507,6 +512,7 @@ namespace emberfield::io {
         /** @brief 读取周期关系，保留节点标签直到统一解析。@param r 读取器。@param d 数据。
          * @pre 节点段可尚未读取。@note 无返回值。@code periodic(r,d); @endcode */
         void periodic(Reader& r, MeshData& d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::periodic", emberfield::NvtxColor::Orange);
             if (r.version_ == "2.2") {
                 const bool binary = r.binary_;
                 r.binary_ = false;
@@ -562,6 +568,7 @@ namespace emberfield::io {
         /** @brief 读取幽灵单元。@param r 读取器。@param d 数据。@pre 4.1编码。
          * @note 无返回值。@code ghosts(r,d); @endcode */
         void ghosts(Reader& r, MeshData& d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ghosts", emberfield::NvtxColor::Orange);
             auto n = r.count();
             for (Index i = 0; i < n; ++i) {
                 GhostElement g;
@@ -575,6 +582,7 @@ namespace emberfield::io {
         /** @brief 读取实体参数化采样。@param r 读取器。@param d 数据。@pre 4.1编码。
          * @note 无返回值。@code parametrizations(r,d); @endcode */
         void parametrizations(Reader& r, MeshData& d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::parametrizations", emberfield::NvtxColor::Orange);
             auto curves = r.count(), surfaces = r.count();
             for (int dim = 1; dim <= 2; ++dim) {
                 for (Index i = 0; i < (dim == 1 ? curves : surfaces); ++i) {
@@ -601,6 +609,7 @@ namespace emberfield::io {
     } // namespace
 
     MshDocument readMsh(std::istream& input, MshLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::readMsh", emberfield::NvtxColor::Orange);
         std::string bytes;
         std::array<char, 8192> chunk;
         while (input.read(chunk.data(), chunk.size()) || input.gcount()) {
@@ -906,6 +915,7 @@ namespace emberfield::io {
          * @param document 文档。@pre Mesh已验证。@note 无返回值，失败抛异常。
          * @code writable(document); @endcode */
         void writable(const MshDocument& document) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writable", emberfield::NvtxColor::Orange);
             const auto& d = document.mesh_.data();
             if (!d.elementPartitions_.empty()) {
                 fail("per-cell partition memberships require explicit MSH4.1 partition-entity conversion");
@@ -1014,6 +1024,7 @@ namespace emberfield::io {
         /** @brief 写原始或分区实体。@param w 编码器。@param d 网格。@param partitioned 分区段。
          * @pre 可表示性已验证。@note 无返回值。@code writeEntities(w,d,false); @endcode */
         void writeEntities(Writer& w, const MeshData& d, bool partitioned) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writeEntities", emberfield::NvtxColor::Orange);
             auto name = partitioned ? "PartitionedEntities" : "Entities";
             w.begin(name);
             if (partitioned) {
@@ -1061,6 +1072,7 @@ namespace emberfield::io {
     } // namespace
 
     void writeMsh(std::ostream& output, const MshDocument& document, MshEncoding encoding, MshVersion version) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writeMsh", emberfield::NvtxColor::Orange);
         if (encoding != MshEncoding::Ascii && encoding != MshEncoding::Binary) {
             fail("invalid output encoding");
         }
@@ -1395,6 +1407,7 @@ namespace emberfield::io {
         }
     }
     MshDocument loadMsh(const std::filesystem::path& path, MshLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::loadMsh", emberfield::NvtxColor::Orange);
         std::ifstream input(path, std::ios::binary);
         if (!input) {
             fail("cannot open input " + path.string());
@@ -1403,6 +1416,7 @@ namespace emberfield::io {
     }
     void saveMsh(const std::filesystem::path& path, const MshDocument& document, MshEncoding encoding,
                  MshVersion version) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::saveMsh", emberfield::NvtxColor::Orange);
         std::ostringstream bytes(std::ios::out | std::ios::binary);
         writeMsh(bytes, document, encoding, version);
         std::ofstream output(path, std::ios::binary | std::ios::trunc);

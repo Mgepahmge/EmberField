@@ -1,6 +1,7 @@
 /** @file Conditions.cu
  * @brief 实现共享温度冲突、物理初态及组装前条件关联。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Conditions.cuh>
 #include <cmath>
 #include <map>
@@ -22,6 +23,7 @@ namespace emberfield::problem {
     }
     std::optional<DirichletConstraints> buildDirichletConstraints(const BoundCase& b, const fem::FiniteElementSpace& s,
                                                                   std::size_t limit, Diagnostics& diagnostics) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildDirichletConstraints", emberfield::NvtxColor::Yellow);
         if (!limit) {
             throw std::invalid_argument("温度关联限额必须为正");
         }
@@ -130,6 +132,7 @@ namespace emberfield::problem {
     std::optional<std::vector<double>> buildInitialTemperature(const BoundCase& b, const fem::FiniteElementSpace& s,
                                                                const DirichletConstraints& constraints,
                                                                std::size_t limit, Diagnostics& diagnostics) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildInitialTemperature", emberfield::NvtxColor::Yellow);
         if (!limit) {
             throw std::invalid_argument("初温关联上限必须为正");
         }
@@ -220,6 +223,7 @@ namespace emberfield::problem {
     ConditionPreparationResult prepareConditions(std::shared_ptr<const BoundCase> b,
                                                  std::shared_ptr<const fem::FiniteElementSpace> s,
                                                  const PreparationOptions& o) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::prepareConditions", emberfield::NvtxColor::Yellow);
         validatePreparationOptions(o, s ? s->dimension() : 2);
         ConditionPreparationResult result(o.maxDiagnostics_);
         auto& diagnostics = result.diagnostics_;

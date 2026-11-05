@@ -2,6 +2,7 @@
  * @brief 通过独立线性代数及预条件接口实现右预条件 BiCGStab。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Solver/Iterative/Solver.cuh>
 #include <Solver/Preconditioner/Amg.cuh>
@@ -71,6 +72,7 @@ namespace emberfield {
          * @note 任一步失败都要求重新成功 setup；不承诺保留上一次可用状态。
          */
         void setup(const CsrMatrix<T, I>& matrix) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::BiCgStab::setup", emberfield::NvtxColor::Magenta);
             state_.reset();
             iteration::validateMatrix(matrix);
             linalg::detail::OperationScope scope(matrix.rowOffsets().deviceId());
@@ -89,6 +91,7 @@ namespace emberfield {
          * @throws std::invalid_argument 向量尺寸或设备不匹配。
          */
         SolveResult<T> apply(const Vector<T>& rhs, Vector<T>& x) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::BiCgStab::apply", emberfield::NvtxColor::Magenta);
             if (!state_) {
                 throw std::logic_error("BiCGStab requires setup");
             }
@@ -123,6 +126,7 @@ namespace emberfield {
          * @pre 状态完整。@return 校验后的报告。@code return finish(status, k, normB, tolerance); @endcode
          */
         SolveResult<T> finish(SolveStatus status, int iterations, T normB, T tolerance) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::BiCgStab::finish", emberfield::NvtxColor::Magenta);
             auto& s = *state_;
             s.context_.residual(s.rhs_, s.x_, s.r_);
             const T residual = s.context_.norm(s.r_);
@@ -145,6 +149,7 @@ namespace emberfield {
          * rhoPrevious 只在下一轮使用已有方向时参与递推。
          */
         SolveResult<T> solve() {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::BiCgStab::solve", emberfield::NvtxColor::Magenta);
             auto& s = *state_;
             auto& operations = s.context_;
             const T normB = operations.norm(s.rhs_);
@@ -161,6 +166,7 @@ namespace emberfield {
             T rhoPrevious = 1, alpha = 1, omega = 1;
             bool fresh = true;
             for (int k = 0; k < options_.maxIterations_; ++k) {
+                EMBERFIELD_NVTX_SCOPE("emberfield::BiCgStab::iteration");
                 const int iterations = k + 1;
                 const T rho = operations.dot(s.shadow_, s.r_);
                 if (!std::isfinite(rho)) {
@@ -203,6 +209,7 @@ namespace emberfield {
                     return finish(SolveStatus::NonFinite, iterations, normB, tolerance);
                 }
                 if (normS <= tolerance) {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::BiCgStab::earlyResidualCheck");
                     operations.residual(s.rhs_, s.x_, s.r_);
                     residual = operations.norm(s.r_);
                     if (residual <= tolerance || !std::isfinite(residual)) {
@@ -236,6 +243,7 @@ namespace emberfield {
                     return finish(SolveStatus::NonFinite, iterations, normB, tolerance);
                 }
                 if (residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0) {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::BiCgStab::residualRefresh");
                     operations.residual(s.rhs_, s.x_, s.r_);
                     residual = operations.norm(s.r_);
                     if (residual <= tolerance || !std::isfinite(residual)) {

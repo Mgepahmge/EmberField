@@ -1,6 +1,7 @@
 /** @file Binding.cu
  * @brief 实现算例到活动域的事务绑定，明确区分身份合法与后端可执行。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Binding.cuh>
 #include <Simulation/Case/Region.cuh>
 #include <algorithm>
@@ -45,6 +46,7 @@ namespace emberfield::problem {
         }
     } // namespace
     BindResult bindCase(const CaseDefinition& definition, std::shared_ptr<const mesh::Mesh> mesh, CaseLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::bindCase", emberfield::NvtxColor::Yellow);
         auto diagnostics = validateCase(definition, limits);
         if (!mesh) {
             issue(diagnostics, "NULL_MESH", "/mesh", "网格所有权为空");

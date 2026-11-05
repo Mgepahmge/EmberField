@@ -6,6 +6,7 @@
 #include <IO/Result/Archive.cuh>
 #include <IO/Result/Pvd.cuh>
 #include <IO/Result/Vtu.cuh>
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Region.cuh>
 #include <chrono>
 #include <cmath>
@@ -263,6 +264,7 @@ namespace emberfield::io {
         template <class F>
             requires std::invocable<F, std::ostream&>
         void file(const std::string& path, F&& writer) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::Impl::file", emberfield::NvtxColor::Orange);
             const auto allowance = remaining() + sizes_[path];
             std::ofstream f(directory_ / path, std::ios::binary | std::ios::trunc);
             if (!f) {
@@ -291,6 +293,7 @@ namespace emberfield::io {
         /** @brief 同步表格清单后最后提交摘要，无参数。@pre 前面文件已完成。
          * @note 无返回值，失败保留旧摘要。@code commit(); @endcode */
         void commit() {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::Impl::commit", emberfield::NvtxColor::Orange);
             auto table = [](const Table& t) {
                 return J(O{{"path", J(t.path_)},
                            {"committedRows", J(std::to_string(t.rows_))},
@@ -306,6 +309,7 @@ namespace emberfield::io {
          * @pre 尚未提交摘要。@note 无返回值，失败不更新前缀。
          * @code append(steps,row,1); @endcode */
         void append(Table& table, const std::string& rows, std::uint64_t count) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::Impl::append", emberfield::NvtxColor::Orange);
             if (rows.size() > remaining()) {
                 throw std::length_error("CSV输出预算不足");
             }
@@ -322,6 +326,7 @@ namespace emberfield::io {
          * @param step 可选步。@pre 无。@note 无返回值，错误传播。@code log("INFO","RUN","开始",{}); @endcode */
         void log(const std::string& level, const std::string& code, const std::string& message,
                  std::optional<std::uint64_t> step) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::Impl::log", emberfield::NvtxColor::Orange);
             std::string clean;
             for (char c : message) {
                 if (c == '\r') {
@@ -350,6 +355,7 @@ namespace emberfield::io {
     ResultArchive::ResultArchive(const std::filesystem::path& directory, const std::filesystem::path& input,
                                  const problem::AssembledThermalModel& model,
                                  const problem::ThermalPostprocessPlan& plan) : impl_(std::make_unique<Impl>()) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::ResultArchive", emberfield::NvtxColor::Orange);
         auto& s = *impl_;
         const auto& prepared = *model.plan()->prepared();
         const auto& d = prepared.bound()->data();
@@ -603,6 +609,7 @@ namespace emberfield::io {
         s.log(warning ? "WARNING" : "ERROR", diagnostic.code_, stage + ": " + diagnostic.message_, {});
     }
     void ResultArchive::publishStep(const StepRecord& r, const problem::ThermalFields* fields, bool saveFrame) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::publishStep", emberfield::NvtxColor::Orange);
         auto& s = *impl_;
         if (s.finished_ || s.broken_) {
             throw std::logic_error("输出会话已终结或失败");
@@ -647,6 +654,7 @@ namespace emberfield::io {
         try {
             std::string path;
             if (saveFrame) {
+                EMBERFIELD_NVTX_SCOPE("emberfield::io::ResultArchive::publishStep/frame");
                 auto& frames = s.summary_["frames"].get<A>();
                 if (frames.size() >= s.maxFrames_) {
                     throw std::length_error("输出帧数超限");
@@ -775,6 +783,7 @@ namespace emberfield::io {
     }
     void ResultArchive::finish(bool success, std::string code, std::string message, bool outputFailure,
                                bool interrupted) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::ResultArchive::finish", emberfield::NvtxColor::Orange);
         auto& s = *impl_;
         if (s.finished_) {
             throw std::logic_error("重复终结结果会话");

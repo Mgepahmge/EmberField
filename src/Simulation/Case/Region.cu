@@ -1,6 +1,7 @@
 /** @file Region.cu
  * @brief 实现块覆盖优先的物理分组与确定性的选择器集合运算。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Region.cuh>
 #include <Simulation/Case/Validation.cuh>
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 namespace emberfield::problem {
     PhysicalMembership buildPhysicalMembership(const mesh::Mesh& mesh, std::size_t maxEntries) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildPhysicalMembership", emberfield::NvtxColor::Yellow);
         if (!maxEntries) {
             throw std::invalid_argument("分组索引限额必须为正");
         }
@@ -149,6 +151,7 @@ namespace emberfield::problem {
         };
     } // namespace
     RegionResult resolveRegion(const RegionSelector& selector, const PhysicalMembership& index, CaseLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::resolveRegion", emberfield::NvtxColor::Yellow);
         validateLimits(limits);
         Resolver resolver(index, limits);
         auto [dim, cells] = resolver.walk(selector, "", 1);

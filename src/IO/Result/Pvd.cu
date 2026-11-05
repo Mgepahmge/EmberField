@@ -2,6 +2,7 @@
  * @brief 编码仅引用完整相对路径的ParaView时间索引。
  */
 #include <IO/Result/Pvd.cuh>
+#include <NVTXProfiler.cuh>
 #include <cmath>
 #include <set>
 #include <stdexcept>
@@ -9,6 +10,7 @@
 
 namespace emberfield::io {
     void writePvd(std::ostream& stream, std::span<const PvdEntry> entries) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::writePvd", emberfield::NvtxColor::Orange);
         if (entries.empty()) {
             throw std::invalid_argument("PVD集合不能为空");
         }

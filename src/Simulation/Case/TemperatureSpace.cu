@@ -1,11 +1,13 @@
 /** @file TemperatureSpace.cu
  * @brief 实现算例到通用空间的单向适配，区分编号成功与物理检查完成。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/TemperatureSpace.cuh>
 #include <stdexcept>
 
 namespace emberfield::problem {
     TemperatureSpaceResult buildTemperatureSpace(const BoundCase& bound, fem::SpaceLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildTemperatureSpace", emberfield::NvtxColor::Yellow);
         if (!limits.maxCells_ || !limits.maxLocalDofs_ || !limits.maxGlobalDofs_ || !limits.maxDiagnostics_) {
             throw std::invalid_argument("温度空间限额必须为正");
         }

@@ -1,6 +1,7 @@
 /** @file Validation.cu
  * @brief 实现物性、选择器、分析模式与运行选项的聚合静态校验。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Validation.cuh>
 #include <algorithm>
 #include <cmath>
@@ -136,6 +137,7 @@ namespace emberfield::problem {
         };
     } // namespace
     Diagnostics validateCase(const CaseDefinition& c, CaseLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::validateCase", emberfield::NvtxColor::Yellow);
         validateLimits(limits);
         Checker v(limits);
         v.definition_ = &c;

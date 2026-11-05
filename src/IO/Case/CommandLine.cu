@@ -1,6 +1,7 @@
 /** @file CommandLine.cu @brief 真实进程路径与单级结果目录校验。 */
 #include <DataStructure/Field/Grid.cuh>
 #include <IO/Case/CommandLine.cuh>
+#include <NVTXProfiler.cuh>
 #include <stdexcept>
 #ifdef _WIN32
 #define NOMINMAX
@@ -10,6 +11,7 @@
 #endif
 namespace emberfield::io {
     std::filesystem::path executableDirectory() {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::executableDirectory", emberfield::NvtxColor::Orange);
 #ifdef _WIN32
         std::wstring value(32768, L'\0');
         const auto n = GetModuleFileNameW(nullptr, value.data(), static_cast<DWORD>(value.size()));
@@ -38,6 +40,7 @@ namespace emberfield::io {
     }
     std::filesystem::path outputDirectory(const std::filesystem::path& input, const std::filesystem::path& root,
                                           const std::optional<std::string>& name) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::outputDirectory", emberfield::NvtxColor::Orange);
         const auto folder = name.value_or(input.stem().string());
         field::validateText(folder);
         if (folder.empty() || folder == "." || folder == ".." ||

@@ -2,6 +2,7 @@
  * @brief 实现无浮点原子的稳定设备归约、候选检查和统一提交。
  */
 #include <FEM/Assembly/Operations.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -39,6 +40,8 @@ namespace emberfield::assembly {
         }
     } // namespace
     AssemblyAccumulator::AssemblyAccumulator(std::shared_ptr<const AssemblyPlan> plan) : plan_(std::move(plan)) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::assembly::AssemblyAccumulator::AssemblyAccumulator",
+                                    emberfield::NvtxColor::Green);
         if (!plan_) {
             throw std::invalid_argument("组装计划为空");
         }
@@ -59,6 +62,9 @@ namespace emberfield::assembly {
     }
     void AssemblyAccumulator::add(std::size_t first, std::size_t count, const CudaBuffer<double>& entries,
                                   bool matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::assembly::AssemblyAccumulator::add", emberfield::NvtxColor::Green);
+        EMBERFIELD_NVTX_SCOPE(matrix ? "emberfield::assembly::accumulateMatrix"
+                                     : "emberfield::assembly::accumulateVector");
         if (matrix_.rowCount() != plan_->dofCount()) {
             throw std::logic_error("累加器结果已接管");
         }
@@ -86,7 +92,11 @@ namespace emberfield::assembly {
         }
         std::vector<std::size_t> order(length);
         std::iota(order.begin(), order.end(), 0);
-        std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return slots[a] < slots[b]; });
+        {
+            EMBERFIELD_NVTX_SCOPE("emberfield::assembly::AssemblyAccumulator::add/sortSlots");
+            std::stable_sort(order.begin(), order.end(),
+                             [&](std::size_t a, std::size_t b) { return slots[a] < slots[b]; });
+        }
         std::vector<Index> targets;
         std::vector<std::size_t> boundaries;
         for (std::size_t i = 0; i < length; ++i) {

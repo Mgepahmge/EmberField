@@ -2,6 +2,7 @@
  * @brief 实现 AMG 专属的聚合、传输、粗层 LU、循环与层次状态。
  * @details 算法参考非公开 YHAMG-GPU，内部运算以函数与组合解耦，仅供本模块使用。
  */
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <Solver/Preconditioner/Amg.cuh>
@@ -154,6 +155,10 @@ namespace emberfield {
              * @code executeCycle(Cycle::W,0,operations,true); @endcode */
             template <CycleOperations O>
             void executeCycle(Cycle kind, std::size_t level, O& operations, bool zeroInitial = true) {
+                EMBERFIELD_NVTX_SCOPE_COLOR(kind == Cycle::F       ? "emberfield::multigrid::cycle/F"
+                                                : kind == Cycle::W ? "emberfield::multigrid::cycle/W"
+                                                                   : "emberfield::multigrid::cycle/V",
+                                            emberfield::NvtxColor::Magenta);
                 if (kind != Cycle::V && kind != Cycle::W && kind != Cycle::F) {
                     throw std::invalid_argument("Unknown AMG cycle");
                 }
@@ -250,6 +255,8 @@ namespace emberfield {
                      * @endcode */
                     void reserve(size_t n) {
                         if (n > buffer_.size()) {
+                            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::WorkspaceBuffer::grow",
+                                                        emberfield::NvtxColor::Magenta);
                             buffer_ = CudaBuffer<T>(n);
                         }
                     }
@@ -283,6 +290,8 @@ namespace emberfield {
                     /** @brief 增长坐标缓冲区。@param n 条目数。@pre 非负。@note 无返回值。@code workspace.entries(10);
                      * @endcode */
                     void entries(int n) {
+                        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::Workspace::entries",
+                                                    emberfield::NvtxColor::Magenta);
                         inputKeys_.reserve(n);
                         sortedKeys_.reserve(n);
                         inputValues_.reserve(n);
@@ -295,6 +304,8 @@ namespace emberfield {
                     /** @brief 回传设备标量，无参数。@pre count 已写入。@return 标量。@code workspace.scalar(); @endcode
                      */
                     int scalar() {
+                        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::Workspace::scalar",
+                                                    emberfield::NvtxColor::Magenta);
                         int result;
                         checkCuda(cudaMemcpy(&result, count_.data(), sizeof(int), cudaMemcpyDeviceToHost),
                                   "AMG scalar download");
@@ -304,6 +315,8 @@ namespace emberfield {
                      * @param in 输入。@param out 输出。@param n 长度。@pre 数组有效且不别名。
                      * @note 无返回值。@code workspace.scan(flags,prefix,n); @endcode */
                     void scan(int* in, int* out, int n) {
+                        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::Workspace::scan",
+                                                    emberfield::NvtxColor::Magenta);
                         size_t bytes = 0;
                         checkCuda(cub::DeviceScan::ExclusiveSum(nullptr, bytes, in, out, n), "AMG scan size");
                         scratch_.reserve(bytes);
@@ -369,6 +382,7 @@ namespace emberfield {
                 template <class Reduce>
                     requires std::invocable<Reduce, double, double>
                 Matrix compress(Workspace& workspace, int rows, int nnz, Reduce reduce) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::compress", emberfield::NvtxColor::Magenta);
                     if (nnz == 0) {
                         CudaBuffer<int> rowOffsets(size_t(rows) + 1), columnIndices;
                         CudaBuffer<double> entries;
@@ -379,30 +393,37 @@ namespace emberfield {
                     }
                     const int bits = workspace.bits(rows), endBit = bits + columnBits(rows);
                     size_t bytes = 0;
-                    checkCuda(cub::DeviceRadixSort::SortPairs(
-                                  nullptr, bytes, workspace.inputKeys_.data(), workspace.sortedKeys_.data(),
-                                  workspace.inputValues_.data(), workspace.sortedValues_.data(), nnz, 0, endBit),
-                              "AMG sort size");
-                    workspace.scratch_.reserve(bytes);
-                    checkCuda(cub::DeviceRadixSort::SortPairs(workspace.scratch_.data(), bytes,
-                                                              workspace.inputKeys_.data(), workspace.sortedKeys_.data(),
-                                                              workspace.inputValues_.data(),
-                                                              workspace.sortedValues_.data(), nnz, 0, endBit),
-                              "AMG sort");
+                    {
+                        EMBERFIELD_NVTX_SCOPE("emberfield::multigrid::compress/sort");
+                        checkCuda(cub::DeviceRadixSort::SortPairs(
+                                      nullptr, bytes, workspace.inputKeys_.data(), workspace.sortedKeys_.data(),
+                                      workspace.inputValues_.data(), workspace.sortedValues_.data(), nnz, 0, endBit),
+                                  "AMG sort size");
+                        workspace.scratch_.reserve(bytes);
+                        checkCuda(cub::DeviceRadixSort::SortPairs(
+                                      workspace.scratch_.data(), bytes, workspace.inputKeys_.data(),
+                                      workspace.sortedKeys_.data(), workspace.inputValues_.data(),
+                                      workspace.sortedValues_.data(), nnz, 0, endBit),
+                                  "AMG sort");
+                    }
                     bytes = 0;
 
                     Key* uniqueKeys = workspace.compact_ ? workspace.inputKeys_.data() : workspace.uniqueKeys_.data();
                     double* uniqueValues =
                         workspace.compact_ ? workspace.inputValues_.data() : workspace.uniqueValues_.data();
-                    checkCuda(cub::DeviceReduce::ReduceByKey(nullptr, bytes, workspace.sortedKeys_.data(), uniqueKeys,
-                                                             workspace.sortedValues_.data(), uniqueValues,
-                                                             workspace.count_.data(), reduce, nnz),
-                              "AMG reduce size");
-                    workspace.scratch_.reserve(bytes);
-                    checkCuda(cub::DeviceReduce::ReduceByKey(
-                                  workspace.scratch_.data(), bytes, workspace.sortedKeys_.data(), uniqueKeys,
-                                  workspace.sortedValues_.data(), uniqueValues, workspace.count_.data(), reduce, nnz),
-                              "AMG reduce");
+                    {
+                        EMBERFIELD_NVTX_SCOPE("emberfield::multigrid::compress/reduceByKey");
+                        checkCuda(cub::DeviceReduce::ReduceByKey(nullptr, bytes, workspace.sortedKeys_.data(),
+                                                                 uniqueKeys, workspace.sortedValues_.data(),
+                                                                 uniqueValues, workspace.count_.data(), reduce, nnz),
+                                  "AMG reduce size");
+                        workspace.scratch_.reserve(bytes);
+                        checkCuda(cub::DeviceReduce::ReduceByKey(workspace.scratch_.data(), bytes,
+                                                                 workspace.sortedKeys_.data(), uniqueKeys,
+                                                                 workspace.sortedValues_.data(), uniqueValues,
+                                                                 workspace.count_.data(), reduce, nnz),
+                                  "AMG reduce");
+                    }
                     int unique = workspace.scalar();
                     CudaBuffer<int> rowOffsets(size_t(rows) + 1), columnIndices(unique);
                     CudaBuffer<double> entries(unique);
@@ -421,6 +442,7 @@ namespace emberfield {
                  * @param rows 输出阶数。@param workspace 工作区。@pre 有效映射、当前设备正确。
                  * @return 粗矩阵，条目数不超过输入。@code auto ac=galerkin(a,map,rows,workspace); @endcode */
                 Matrix galerkin(const Matrix& a, const int* map, int rows, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::galerkin", emberfield::NvtxColor::Magenta);
                     int nnz = int(a.nonZeroCount());
                     workspace.entries(nnz);
                     mapEntries<<<grid(int(a.rowCount())), block>>>(
@@ -507,6 +529,8 @@ namespace emberfield {
                  * @details 仅读回标量错误标志；对角缺失、零或倒数非有限均拒绝。
                  * @code validateMatrix(a,workspace); @endcode */
                 void validateMatrix(const Matrix& a, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::validateMatrix",
+                                                emberfield::NvtxColor::Magenta);
                     checkCuda(cudaMemset(workspace.count_.data(), 0, sizeof(int)), "AMG validation flag");
                     workspace.maximum_.reserve(a.rowCount());
                     validate<<<grid(int(a.rowCount())), block>>>(
@@ -564,6 +588,7 @@ namespace emberfield {
                  * @pre 已对同一矩阵调用 validateMatrix。@return 无自环的对称正权图。
                  * @code auto graph=strengthGraph(a,.25,workspace); @endcode */
                 Matrix strengthGraph(const Matrix& a, double threshold, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::strengthGraph", emberfield::NvtxColor::Magenta);
                     if (a.nonZeroCount() > size_t(INT_MAX / 2)) {
                         throw std::overflow_error("Native AMG: strength graph exceeds 32-bit capacity");
                     }
@@ -681,6 +706,7 @@ namespace emberfield {
                  * 两个独立内核保证提议读取一致快照，不能将读写合并为顺序贪心。
                  * @code auto count=pair(graph,8,map,workspace); @endcode */
                 int pair(const Matrix& graph, int rounds, int* map, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::pair", emberfield::NvtxColor::Magenta);
                     int n = int(graph.rowCount());
                     workspace.mate_.reserve(n);
                     workspace.proposal_.reserve(n);
@@ -688,6 +714,7 @@ namespace emberfield {
                     workspace.prefix_.reserve(size_t(n) + 1);
                     checkCuda(cudaMemset(workspace.mate_.data(), 0xff, size_t(n) * sizeof(int)), "AMG unmatched flags");
                     for (int r = 0; r < rounds; ++r) {
+                        EMBERFIELD_NVTX_SCOPE("emberfield::multigrid::pair/matchingRound");
                         propose<<<grid(n), block>>>(n, graph.rowOffsets().deviceData(),
                                                     graph.columnIndices().deviceData(), graph.values().deviceData(),
                                                     workspace.mate_.data(), workspace.proposal_.data());
@@ -755,6 +782,7 @@ namespace emberfield {
                  * @pre 映射合法、当前设备正确。@return 第二阶段匹配的强图。
                  * @code auto contracted=contractGraph(graph,map,rows,workspace); @endcode */
                 Matrix contractGraph(const Matrix& g, const int* map, int rows, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::contractGraph", emberfield::NvtxColor::Magenta);
                     int n = int(g.rowCount());
                     workspace.flags_.reserve(size_t(n) + 1);
                     workspace.prefix_.reserve(size_t(n) + 1);
@@ -823,6 +851,7 @@ namespace emberfield {
                  * @details 每轮吸收后重建，使下一轮始终读取完整的新快照。
                  * @code members(n,coarse,map,workspace); @endcode */
                 void members(int n, int coarse, const int* map, Workspace& workspace) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::members", emberfield::NvtxColor::Magenta);
                     workspace.sizes_.reserve(size_t(coarse) + 1);
                     workspace.memberSlots_.reserve(size_t(coarse) * 4);
                     checkCuda(cudaMemset(workspace.sizes_.data(), 0, (size_t(coarse) + 1) * sizeof(int)),
@@ -969,6 +998,7 @@ namespace emberfield {
                  * @code auto t=aggregateImpl(graph,8,true,workspace,histogram); @endcode */
                 AggregateTransfer aggregateImpl(const Matrix& graph, int matchingRounds, bool absorbSingletons,
                                                 Workspace& workspace, int* histogram) {
+                    EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::aggregateImpl", emberfield::NvtxColor::Magenta);
                     int n = int(graph.rowCount());
                     AggregateTransfer t;
                     t.fineRows_ = n;
@@ -987,6 +1017,7 @@ namespace emberfield {
                             workspace.nextMap_.buffer_ = CudaBuffer<int>(n);
                         }
                         for (int round = 0; round < 2; ++round) {
+                            EMBERFIELD_NVTX_SCOPE("emberfield::multigrid::aggregateImpl/absorptionRound");
                             proposeAbsorption<<<grid(n), block>>>(
                                 n, graph.rowOffsets().deviceData(), graph.columnIndices().deviceData(),
                                 graph.values().deviceData(), t.aggregate_.data(), workspace.sizes_.data(),
@@ -1195,6 +1226,8 @@ namespace emberfield {
             GpuAggregation::GpuAggregation(bool compactKeys) : impl_(std::make_unique<Impl>(compactKeys)) {}
             GpuAggregation::~GpuAggregation() = default;
             CsrMatrix<double> GpuAggregation::canonical(const CsrMatrix<double>& a) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::GpuAggregation::canonical",
+                                            emberfield::NvtxColor::Magenta);
                 linalg::detail::OperationScope scope(impl_->device_);
                 if (!a.rowCount() || a.rowCount() >= size_t(INT_MAX) || a.rowCount() != a.columnCount() ||
                     a.nonZeroCount() > size_t(INT_MAX / 2) || a.rowOffsets().deviceId() != impl_->device_) {
@@ -1216,6 +1249,8 @@ namespace emberfield {
                 validateMatrix(a, impl_->workspace_);
             }
             CsrMatrix<double> GpuAggregation::strength(const CsrMatrix<double>& a, double threshold) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::GpuAggregation::strength",
+                                            emberfield::NvtxColor::Magenta);
                 if (!std::isfinite(threshold) || threshold < 0 || threshold > 1) {
                     throw std::invalid_argument("Invalid strength threshold");
                 }
@@ -1225,6 +1260,8 @@ namespace emberfield {
             }
             AggregateTransfer GpuAggregation::aggregate(const CsrMatrix<double>& graph, int rounds,
                                                         bool absorbSingletons) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::GpuAggregation::aggregate",
+                                            emberfield::NvtxColor::Magenta);
                 if (rounds < 1 || rounds > 8 || !graph.rowCount()) {
                     throw std::invalid_argument("Invalid matching configuration");
                 }
@@ -1237,6 +1274,8 @@ namespace emberfield {
                 return transfer;
             }
             CsrMatrix<double> GpuAggregation::galerkin(const CsrMatrix<double>& a, const AggregateTransfer& t) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::GpuAggregation::galerkin",
+                                            emberfield::NvtxColor::Magenta);
                 if (a.rowCount() != size_t(t.fineRows_) || t.coarseRows_ < 1) {
                     throw std::invalid_argument("AMG transfer dimension mismatch");
                 }
@@ -1257,6 +1296,8 @@ namespace emberfield {
             }
             template <linalg::Scalar T>
             void restrictAggregates(const AggregateTransfer& t, const Vector<T>& fine, Vector<T>& coarse) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::restrictAggregates",
+                                            emberfield::NvtxColor::Magenta);
                 validateTransfer(t, fine, coarse);
                 linalg::detail::OperationScope scope(t.aggregate_.deviceId());
                 restrictKernel<<<grid(t.coarseRows_), block>>>(t.coarseRows_, t.offsets_.data(), t.members_.data(),
@@ -1266,6 +1307,7 @@ namespace emberfield {
             }
             template <linalg::Scalar T>
             void prolongAggregates(const AggregateTransfer& t, const Vector<T>& coarse, Vector<T>& fine) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::prolongAggregates", emberfield::NvtxColor::Magenta);
                 validateTransfer(t, fine, coarse);
                 linalg::detail::OperationScope scope(t.aggregate_.deviceId());
                 prolongKernel<<<grid(t.fineRows_), block>>>(t.fineRows_, t.aggregate_.data(), coarse.deviceData(),
@@ -1274,6 +1316,7 @@ namespace emberfield {
                 checkCuda(cudaDeviceSynchronize(), "AMG prolongation completion");
             }
             CoarseFactor factorCoarse(const CsrMatrix<double>& a) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::factorCoarse", emberfield::NvtxColor::Magenta);
                 if (!a.rowCount() || a.rowCount() > 64 || a.rowCount() != a.columnCount()) {
                     throw std::invalid_argument("GPU LU requires order 1..64");
                 }
@@ -1294,6 +1337,7 @@ namespace emberfield {
             }
             template <linalg::Scalar T>
             void solveCoarse(const CoarseFactor& factor, const Vector<T>& rhs, Vector<T>& x) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::solveCoarse", emberfield::NvtxColor::Magenta);
                 if (!factor.factored_ || rhs.size() != size_t(factor.rows_) || x.size() != rhs.size() ||
                     rhs.deviceId() != factor.lu_.deviceId() || x.deviceId() != factor.lu_.deviceId() ||
                     rhs.memoryType() != MemoryType::Global || x.memoryType() != MemoryType::Global) {
@@ -1319,6 +1363,7 @@ namespace emberfield {
              * @return 目标矩阵。@code convertMatrix<float,int>(a); @endcode */
             template <linalg::Scalar T, CsrIndex I, linalg::Scalar U, CsrIndex J>
             CsrMatrix<T, I> convertMatrix(const CsrMatrix<U, J>& a) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::multigrid::convertMatrix", emberfield::NvtxColor::Magenta);
                 if (a.rowCount() >= size_t(INT_MAX) || a.nonZeroCount() > size_t(INT_MAX / 2)) {
                     throw std::length_error("AMG native index capacity exceeded");
                 }
@@ -1400,12 +1445,15 @@ namespace emberfield {
         /** @brief 清零初值。@param d 层号。@pre 层号有效。@note 无返回值。@code adapter.clear(0); @endcode
          */
         void clear(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::clear", emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             l.context_.clear(l.x_);
         }
         /** @brief 调用独立粗层 LU 或保留初值的固定 Jacobi。
          * @param d 最粗层。@pre 状态完整。@note 无返回值。@code adapter.coarseSolve(d); @endcode */
         void coarseSolve(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::coarseSolve",
+                                        emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             if (state_.factor_.factored_) {
                 multigrid::solveCoarse(state_.factor_, l.rhs_, l.x_);
@@ -1417,6 +1465,8 @@ namespace emberfield {
         /** @brief 前平滑。@param d 非粗层。@pre 状态完整。@note 无返回值。@code adapter.preSmooth(0);
          * @endcode */
         void preSmooth(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::preSmooth",
+                                        emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             if (l.pre_) {
                 l.pre_->apply(l.rhs_, l.x_);
@@ -1425,6 +1475,8 @@ namespace emberfield {
         /** @brief 后平滑。@param d 非粗层。@pre 状态完整。@note 无返回值。@code adapter.postSmooth(0);
          * @endcode */
         void postSmooth(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::postSmooth",
+                                        emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             if (l.post_) {
                 l.post_->apply(l.rhs_, l.x_);
@@ -1433,12 +1485,16 @@ namespace emberfield {
         /** @brief F 嵌套初值所需的原右端限制。
          * @param d 非粗层。@pre 状态完整。@note 无返回值。@code adapter.restrictRhs(0); @endcode */
         void restrictRhs(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::restrictRhs",
+                                        emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             multigrid::restrictAggregates(*l.transfer_, l.rhs_, state_.levels_[d + 1]->rhs_);
         }
         /** @brief 分别调用残差和限制，构造粗层误差右端。
          * @param d 非粗层。@pre 状态完整。@note 无返回值。@code adapter.restrictResidual(0); @endcode */
         void restrictResidual(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::restrictResidual",
+                                        emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             l.context_.residual(l.rhs_, l.x_, l.residual_);
             multigrid::restrictAggregates(*l.transfer_, l.residual_, state_.levels_[d + 1]->rhs_);
@@ -1446,6 +1502,7 @@ namespace emberfield {
         /** @brief 延拓累加粗解，F 覆盖初值前由调度器先清零。
          * @param d 非粗层。@pre 状态完整。@note 无返回值。@code adapter.prolong(0); @endcode */
         void prolong(std::size_t d) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::CycleAdapter::prolong", emberfield::NvtxColor::Magenta);
             auto& l = *state_.levels_[d];
             multigrid::prolongAggregates(*l.transfer_, state_.levels_[d + 1]->x_, l.x_);
         }
@@ -1464,6 +1521,7 @@ namespace emberfield {
     }
     template <linalg::Scalar T, CsrIndex I>
     void Amg<T, I>::setup(const CsrMatrix<T, I>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::setup", emberfield::NvtxColor::Magenta);
         iteration::validateMatrix(matrix);
         linalg::detail::OperationScope scope(matrix.rowOffsets().deviceId());
         auto next = std::make_unique<State>();
@@ -1472,6 +1530,7 @@ namespace emberfield {
         global.changeMemoryType(GlobalMemory{});
         auto native = operations.canonical(multigrid::toNativeMatrix(global));
         for (int depth = 0;; ++depth) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::Amg::setup/level");
             operations.validate(native);
             auto typed = multigrid::fromNativeMatrix<T, I>(native);
             // 迭代精度下也须存在有限倒数，防止 double 转 float 产生非法对角。
@@ -1528,6 +1587,7 @@ namespace emberfield {
     }
     template <linalg::Scalar T, CsrIndex I>
     void Amg<T, I>::apply(const Vector<T>& rhs, Vector<T>& x) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::apply", emberfield::NvtxColor::Magenta);
         if (!state_) {
             throw std::logic_error("AMG requires setup");
         }
@@ -1562,6 +1622,7 @@ namespace emberfield {
     }
     template <linalg::Scalar T, CsrIndex I>
     std::unique_ptr<Smoother<T, I>> Amg<T, I>::makeSmoother(const CsrMatrix<T, I>& a, int sweeps) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Amg<T, I>::makeSmoother", emberfield::NvtxColor::Magenta);
         auto smoother = factory_ ? factory_() : std::make_unique<Jacobi<T, I>>(sweeps, options_.jacobiWeight_);
         if (!smoother) {
             throw std::invalid_argument("AMG smoother factory returned null");

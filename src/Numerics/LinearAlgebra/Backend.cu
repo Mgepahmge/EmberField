@@ -1,6 +1,7 @@
 /** @file Backend.cu
  * @brief 实现同步 cuBLAS/cuSPARSE 调用及其句柄、描述符的 RAII 管理。
  */
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Backend.cuh>
 #include <cublas_v2.h>
 #include <cusparse.h>
@@ -93,6 +94,7 @@ namespace emberfield::linalg::detail {
          */
         template <BufferElement T>
         std::vector<T> download(const CudaBuffer<T>& buffer) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::download", emberfield::NvtxColor::Cyan);
             std::vector<T> values(buffer.size());
             buffer.copyToHost(values);
             return values;
@@ -103,6 +105,7 @@ namespace emberfield::linalg::detail {
          */
         template <Scalar T, CsrIndex I>
         void createSparse(SparseDescriptor& descriptor, const CsrMatrix<T, I>& matrix) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::createSparse", emberfield::NvtxColor::Cyan);
             constexpr auto indexType = sizeof(I) == 4 ? CUSPARSE_INDEX_32I : CUSPARSE_INDEX_64I;
             check(cusparseCreateCsr(descriptor.address(), matrix.rowCount(), matrix.columnCount(),
                                     matrix.nonZeroCount(), const_cast<I*>(matrix.rowOffsets().deviceData()),
@@ -127,6 +130,7 @@ namespace emberfield::linalg::detail {
 
     template <Scalar T>
     void blasScale(int count, T alpha, T* values) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasScale", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         if constexpr (std::same_as<T, float>) {
@@ -139,6 +143,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     void blasAxpy(int count, T alpha, const T* x, T* y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasAxpy", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         if constexpr (std::same_as<T, float>) {
@@ -151,6 +156,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     T blasDot(int count, const T* x, const T* y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasDot", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         T result{};
@@ -165,6 +171,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     T blasNorm(int count, const T* x, bool oneNorm) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasNorm", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         T result{};
@@ -183,6 +190,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     void blasTranspose(int rows, int columns, const T* input, T* output) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasTranspose", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         const T alpha{1}, beta{};
@@ -200,6 +208,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     void blasGemv(int rows, int columns, const T* matrix, const T* x, T* y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasGemv", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         const T alpha{1}, beta{};
@@ -215,6 +224,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T>
     void blasGemm(int rows, int columns, int inner, const T* a, const T* b, T* c) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::blasGemm", emberfield::NvtxColor::Cyan);
         BlasHandle handle;
         check(cublasCreate(handle.address()), "cublasCreate");
         check(cublasSetMathMode(handle.get(), CUBLAS_PEDANTIC_MATH), "cublasSetMathMode");
@@ -234,6 +244,7 @@ namespace emberfield::linalg::detail {
 
     template <Scalar T, CsrIndex I>
     void sparseMv(const CsrMatrix<T, I>& matrix, const T* x, T* y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::sparseMv", emberfield::NvtxColor::Cyan);
         SparseHandle handle;
         check(cusparseCreate(handle.address()), "cusparseCreate");
         SparseDescriptor a;
@@ -255,6 +266,7 @@ namespace emberfield::linalg::detail {
     }
     template <Scalar T, CsrIndex I>
     void sparseMm(const CsrMatrix<T, I>& matrix, std::size_t columns, const T* b, T* c) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::sparseMm", emberfield::NvtxColor::Cyan);
         SparseHandle handle;
         check(cusparseCreate(handle.address()), "cusparseCreate");
         SparseDescriptor a;
@@ -282,6 +294,7 @@ namespace emberfield::linalg::detail {
 
     template <Scalar T>
     SparseHostData<T> sparseAdd(const CsrMatrix<T, int>& a, const CsrMatrix<T, int>& b, T beta) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::sparseAdd", emberfield::NvtxColor::Cyan);
         if (a.nonZeroCount() > static_cast<std::size_t>(std::numeric_limits<int>::max()) - b.nonZeroCount()) {
             throw std::length_error("Sparse addition may exceed 32-bit structural range");
         }
@@ -343,6 +356,7 @@ namespace emberfield::linalg::detail {
 
     template <Scalar T>
     SparseHostData<T> sparseTranspose(const CsrMatrix<T, int>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::sparseTranspose", emberfield::NvtxColor::Cyan);
         SparseHandle handle;
         check(cusparseCreate(handle.address()), "cusparseCreate");
         CudaBuffer<int> offsets(matrix.columnCount() + 1), indices(matrix.nonZeroCount());
@@ -367,6 +381,7 @@ namespace emberfield::linalg::detail {
 
     template <Scalar T>
     SparseHostData<T> sparseGemm(const CsrMatrix<T, int>& a, const CsrMatrix<T, int>& b) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::sparseGemm", emberfield::NvtxColor::Cyan);
         SparseHandle handle;
         check(cusparseCreate(handle.address()), "cusparseCreate");
         SparseDescriptor left, right, output;

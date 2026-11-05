@@ -1,6 +1,7 @@
 /** @file Write.cu @brief 独立的类型化算例JSON输出适配。 */
 #define PICOJSON_USE_INT64
 #include <IO/Case/Write.cuh>
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Validation.cuh>
 #include <picojson.h>
 namespace emberfield::io {
@@ -63,6 +64,7 @@ namespace emberfield::io {
         }
     } // namespace
     std::string serializeCase(const problem::CaseDefinition& c) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::serializeCase", emberfield::NvtxColor::Orange);
         if (validateCase(c).hasErrors()) {
             throw std::invalid_argument("拒绝序列化非法算例");
         }

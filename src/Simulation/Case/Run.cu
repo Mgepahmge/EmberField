@@ -103,6 +103,7 @@ namespace emberfield::problem {
         /** @brief 创建运行时求解器。@param o 已验证配置。@pre 迭代数可表示int。@return 独占求解器。@code auto
          * s=solver(o); @endcode */
         std::unique_ptr<Solver<double, assembly::Index>> solver(const LinearOptions& o) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::solver", emberfield::NvtxColor::Yellow);
             if (o.maxIterations_ > INT_MAX) {
                 throw std::length_error("迭代上限超出int");
             }
@@ -192,6 +193,7 @@ namespace emberfield::problem {
                 }
             }
             auto model = [&] {
+                EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase/initialAssembly");
                 if (!c.time_) {
                     return assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared(), limits.assembly_));
                 }
@@ -273,6 +275,7 @@ namespace emberfield::problem {
             // 候选经规定值投影和真实残差复核后才接受；历史状态保留至后处理完成。
             auto advance = [&](const systems::LinearSystem& system, const Vector<double>* previous,
                                io::StepRecord record, bool final) -> std::optional<Vector<double>> {
+                EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase/advance");
                 if (interrupted && *interrupted) {
                     throw std::runtime_error("用户请求中断");
                 }
@@ -280,6 +283,7 @@ namespace emberfield::problem {
                     auto tick = Clock::now();
                     const auto revision = numeric ? numeric->matrixRevision() : 0;
                     if (!setupRevision || *setupRevision != revision || setupDt != record.dt_) {
+                        EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase/solverSetup");
                         iterative->setup(system.matrix());
                         setupRevision = revision;
                         setupDt = record.dt_;
@@ -397,6 +401,7 @@ namespace emberfield::problem {
                 outputStage = false;
                 printProgress(record, fields.minimumK_, fields.maximumK_);
                 while (auto step = cursor->peek()) {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase/timeStep");
                     if (interrupted && *interrupted) {
                         throw std::runtime_error("用户请求中断");
                     }

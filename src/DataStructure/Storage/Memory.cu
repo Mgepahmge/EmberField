@@ -2,6 +2,7 @@
  * @brief 实现 CUDA 内存策略分派、设备归属管理与同步数据传输。
  */
 #include <DataStructure/Storage/Memory.cuh>
+#include <NVTXProfiler.cuh>
 
 #include <cstring>
 #include <limits>
@@ -51,6 +52,8 @@ namespace emberfield {
              * @return 分配地址，失败抛异常。@code auto* pointer = allocate(GlobalMemory{}, 64); @endcode
              */
             void* allocate(GlobalMemory, std::size_t bytes) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::allocate/GlobalMemory",
+                                            emberfield::NvtxColor::SkyBlue);
                 void* result{};
                 checkCuda(cudaMalloc(&result, bytes), "cudaMalloc");
                 return result;
@@ -59,6 +62,8 @@ namespace emberfield {
              * @return 分配地址，失败抛异常。@code auto* pointer = allocate(PinnedMemory{}, 64); @endcode
              */
             void* allocate(PinnedMemory, std::size_t bytes) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::allocate/PinnedMemory",
+                                            emberfield::NvtxColor::SkyBlue);
                 void* result{};
                 checkCuda(cudaMallocHost(&result, bytes), "cudaMallocHost");
                 return result;
@@ -67,6 +72,8 @@ namespace emberfield {
              * @return 主机地址，失败抛异常。@code auto* pointer = allocate(MappedMemory{}, 64); @endcode
              */
             void* allocate(MappedMemory, std::size_t bytes) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::allocate/MappedMemory",
+                                            emberfield::NvtxColor::SkyBlue);
                 int device{};
                 int supported{};
                 checkCuda(cudaGetDevice(&device), "cudaGetDevice");
@@ -83,6 +90,8 @@ namespace emberfield {
              * @return 分配地址，失败抛异常。@code auto* pointer = allocate(ManagedMemory{}, 64); @endcode
              */
             void* allocate(ManagedMemory, std::size_t bytes) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::allocate/ManagedMemory",
+                                            emberfield::NvtxColor::SkyBlue);
                 void* result{};
                 checkCuda(cudaMallocManaged(&result, bytes), "cudaMallocManaged");
                 return result;
@@ -154,6 +163,7 @@ namespace emberfield {
         MemoryStorage::~MemoryStorage() noexcept { release(); }
 
         void MemoryStorage::release() noexcept {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::MemoryStorage::release", emberfield::NvtxColor::SkyBlue);
             if (data_ != nullptr) {
                 int previousDevice{};
                 const bool canRestore = cudaGetDevice(&previousDevice) == cudaSuccess;
@@ -177,6 +187,8 @@ namespace emberfield {
         }
 
         void MemoryStorage::copyDataFrom(const MemoryStorage& other) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::MemoryStorage::copyDataFrom",
+                                        emberfield::NvtxColor::SkyBlue);
             if (bytes_ != other.bytes_) {
                 throw std::invalid_argument("Buffer sizes must match");
             }
@@ -196,6 +208,8 @@ namespace emberfield {
         }
 
         void MemoryStorage::changeMemoryType(MemoryStrategy strategy) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::MemoryStorage::changeMemoryType",
+                                        emberfield::NvtxColor::SkyBlue);
             if (strategy_.index() == strategy.index()) {
                 return;
             }
@@ -210,6 +224,8 @@ namespace emberfield {
         }
 
         void MemoryStorage::copyFromHost(const void* source, std::size_t bytes) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::MemoryStorage::copyFromHost",
+                                        emberfield::NvtxColor::SkyBlue);
             if (bytes != bytes_ || (bytes != 0 && source == nullptr)) {
                 throw std::invalid_argument("Invalid host source or size");
             }
@@ -226,6 +242,8 @@ namespace emberfield {
         }
 
         void MemoryStorage::copyToHost(void* target, std::size_t bytes) const {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::detail::MemoryStorage::copyToHost",
+                                        emberfield::NvtxColor::SkyBlue);
             if (bytes != bytes_ || (bytes != 0 && target == nullptr)) {
                 throw std::invalid_argument("Invalid host target or size");
             }

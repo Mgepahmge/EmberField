@@ -2,6 +2,7 @@
  * @brief 实现尺度归一化带主元映射、母单元外向和相邻侧检查。
  */
 #include <FEM/Element/Geometry.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -262,6 +263,7 @@ namespace emberfield::fem {
     std::shared_ptr<const PreparedGeometry> buildPreparedGeometry(std::shared_ptr<const FiniteElementSpace> space,
                                                                   const GeometryOptions& o, std::size_t maxCells,
                                                                   std::size_t maxFacetUses) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::fem::buildPreparedGeometry", emberfield::NvtxColor::Green);
         if (!space || !maxCells || !maxFacetUses) {
             throw std::invalid_argument("空间不能为空且几何限额必须为正");
         }

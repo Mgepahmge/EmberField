@@ -2,6 +2,7 @@
  * @brief 定义带松弛系数和固定扫描次数的 GPU Jacobi 平滑器。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Diagonal.cuh>
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Solver/Smoother/Smoother.cuh>
@@ -44,6 +45,7 @@ namespace emberfield {
          * @throws std::invalid_argument 方阵或对角线条件不满足。
          */
         void setup(const CsrMatrix<T, I>& matrix) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Jacobi::setup", emberfield::NvtxColor::Magenta);
             iteration::validateMatrix(matrix);
             linalg::detail::OperationScope scope(matrix.rowOffsets().deviceId());
             auto next = std::make_unique<State>(matrix);
@@ -59,6 +61,7 @@ namespace emberfield {
          * @throws std::invalid_argument 向量尺寸或设备不匹配。
          */
         void apply(const Vector<T>& rhs, Vector<T>& x) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Jacobi::apply", emberfield::NvtxColor::Magenta);
             if (!state_) {
                 throw std::logic_error("Jacobi requires setup");
             }
@@ -68,6 +71,7 @@ namespace emberfield {
             s.rhs_.copyDataFrom(rhs);
             s.x_.copyDataFrom(x);
             for (int sweep = 0; sweep < sweeps_; ++sweep) {
+                EMBERFIELD_NVTX_SCOPE("emberfield::Jacobi::sweep");
                 s.context_.multiply(s.x_, s.product_);
                 s.context_.jacobi(weight_, s.inverse_, s.rhs_, s.product_, s.x_);
             }

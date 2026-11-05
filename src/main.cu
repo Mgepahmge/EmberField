@@ -6,6 +6,7 @@
 #include <CLI11.hpp>
 #include <IO/Case/CommandLine.cuh>
 #include <IO/Case/ResourceLimits.cuh>
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Run.cuh>
 #include <version.cuh>
 
@@ -30,6 +31,7 @@ namespace {
      * @pre 只在普通运行参数解析后调用。@note 无返回值；设备查询失败仅影响展示。
      * @code printHardware(); @endcode */
     void printHardware() {
+        EMBERFIELD_NVTX_SCOPE_COLOR("printHardware", emberfield::NvtxColor::Rose);
         int device = 0;
         cudaDeviceProp properties{};
         if (cudaGetDevice(&device) == cudaSuccess && cudaGetDeviceProperties(&properties, device) == cudaSuccess) {
@@ -55,6 +57,7 @@ namespace {
      * @code printBanner(version,"case.json","results/case",""); @endcode */
     void printBanner(const emberfield::Version& version, const std::string& input, const std::filesystem::path& output,
                      const std::string& limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("printBanner", emberfield::NvtxColor::Rose);
         std::cout << R"(
   +-----------------------------------------------------------+
   |  E M B E R F I E L D                                      |
@@ -103,6 +106,7 @@ namespace {
  * @endcode
  */
 int main(int argc, char** argv) {
+    EMBERFIELD_NVTX_SCOPE_COLOR("main", emberfield::NvtxColor::Rose);
     CLI::App app{"EmberField 热传导有限元求解器"};
     std::string input, root, name, resourceLimits;
     app.add_option("input", input, "算例配置文件路径")->required()->check(CLI::ExistingFile);
@@ -114,8 +118,11 @@ int main(int argc, char** argv) {
                          "EmberField " + std::to_string(version.major_) + "." + std::to_string(version.minor_) + "." +
                              std::to_string(version.patch_));
     try {
-        argv = app.ensure_utf8(argv);
-        app.parse(argc, argv);
+        {
+            EMBERFIELD_NVTX_SCOPE("emberfield::cli/parse");
+            argv = app.ensure_utf8(argv);
+            app.parse(argc, argv);
+        }
         const auto limits = resourceLimits.empty() ? emberfield::problem::ResourceLimits{}
                                                    : emberfield::io::loadResourceLimits(resourceLimits);
         const auto directory = emberfield::io::outputDirectory(

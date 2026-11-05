@@ -2,6 +2,7 @@
  * @brief 复用有限元几何建立身份映射、AABB定位以及GPU物理场和离散热量诊断。
  */
 #define PICOJSON_USE_INT64
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <Simulation/Case/Postprocess.cuh>
 #include <Simulation/Case/Region.cuh>
@@ -247,6 +248,8 @@ namespace emberfield::problem {
     };
     ThermalPostprocessPlan::ThermalPostprocessPlan(std::shared_ptr<const PreparedThermalCase> prepared) :
         impl_(std::make_unique<Impl>()) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::ThermalPostprocessPlan",
+                                    emberfield::NvtxColor::Yellow);
         if (!prepared) {
             throw std::invalid_argument("后处理准备对象为空");
         }
@@ -526,6 +529,8 @@ namespace emberfield::problem {
                                                                        std::uint64_t step, std::optional<double> time,
                                                                        bool initial,
                                                                        const EvaluatedThermalState* state) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::evaluateThermalFields",
+                                    emberfield::NvtxColor::Yellow);
         auto& s = *impl_;
         const auto& def = s.prepared_->bound()->data().definition_;
         const auto& output = def.output_;
@@ -577,6 +582,8 @@ namespace emberfield::problem {
     }
     std::vector<MonitorValue> ThermalPostprocessPlan::evaluateMonitors(const Vector<double>& temperature,
                                                                        const EvaluatedThermalState* state) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::evaluateMonitors",
+                                    emberfield::NvtxColor::Yellow);
         auto& s = *impl_;
         const auto& def = s.prepared_->bound()->data().definition_;
         const auto& output = def.output_;
@@ -652,6 +659,8 @@ namespace emberfield::problem {
                                                                   std::optional<double> dt, bool initial,
                                                                   const EvaluatedThermalState* state,
                                                                   const EvaluatedThermalState* previousState) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::evaluateHeatBalance",
+                                    emberfield::NvtxColor::Yellow);
         if (model.parameters().get() != state) {
             throw std::invalid_argument("后处理模型与参数快照身份错配");
         }
@@ -771,6 +780,8 @@ namespace emberfield::problem {
                                                    std::optional<double> time, bool initial, bool includeFrame,
                                                    const EvaluatedThermalState* state,
                                                    const EvaluatedThermalState* previousState) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::evaluate",
+                                    emberfield::NvtxColor::Yellow);
         auto& s = *impl_;
         const auto& definition = s.prepared_->bound()->data().definition_;
         if (state && (!time || *time != state->time())) {
@@ -813,6 +824,8 @@ namespace emberfield::problem {
                                                    const Vector<double>& temperature, const Vector<double>* previous,
                                                    const EvaluatedThermalState* previousState, std::optional<double> dt,
                                                    std::uint64_t step, bool initial, bool includeFrame) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalPostprocessPlan::evaluate",
+                                    emberfield::NvtxColor::Yellow);
         return evaluate(numeric.model(), temperature, previous, dt, step, numeric.parameters().time(), initial,
                         includeFrame, &numeric.parameters(), previousState);
     }

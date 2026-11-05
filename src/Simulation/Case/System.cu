@@ -1,6 +1,7 @@
 /** @file System.cu
  * @brief 按编号分量诊断常数零空间，并调度独立GPU系统操作。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/System.cuh>
 #include <algorithm>
 #include <cmath>
@@ -12,6 +13,7 @@ namespace emberfield::problem {
             std::all_of(components_.begin(), components_.end(), [](const ComponentCheck& c) { return c.anchored(); });
     }
     SolvabilityReport checkThermalSolvability(const AssembledThermalModel& m, double relative, double absolute) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::checkThermalSolvability", emberfield::NvtxColor::Yellow);
         if (hasTimeDependentFields(m.plan()->prepared()->bound()->data().definition_)) {
             throw std::invalid_argument("静态可解性接口不接受时变模型；瞬态正容量在演化系统工厂处理");
         }
@@ -71,6 +73,7 @@ namespace emberfield::problem {
         }
     } // namespace
     systems::LinearSystem buildThermalSteadySystem(const AssembledThermalModel& m) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildThermalSteadySystem", emberfield::NvtxColor::Yellow);
         if (m.capacity()) {
             throw std::invalid_argument("稳态工厂需要稳态模型");
         }
@@ -80,6 +83,7 @@ namespace emberfield::problem {
     }
     systems::LinearSystem buildThermalStepSystem(const AssembledThermalModel& m, const Vector<double>& previous,
                                                  double dt) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildThermalStepSystem", emberfield::NvtxColor::Yellow);
         if (!m.capacity()) {
             throw std::invalid_argument("后向Euler工厂需要瞬态模型");
         }

@@ -2,6 +2,7 @@
  * @brief 提供独立的 CSR 逆对角线提取接口。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <cmath>
 namespace emberfield::linalg {
@@ -12,6 +13,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     Vector<T> inverseDiagonal(const CsrMatrix<T, I>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::inverseDiagonal", emberfield::NvtxColor::Cyan);
         if (!matrix.rowCount() || matrix.rowCount() != matrix.columnCount()) {
             throw std::invalid_argument("Inverse diagonal requires a nonempty square matrix");
         }

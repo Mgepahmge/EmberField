@@ -2,6 +2,7 @@
  * @brief 实现预算受检的符号排序、局部槽映射和并查集分量。
  */
 #include <FEM/Assembly/Plan.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -11,6 +12,7 @@
 namespace emberfield::assembly {
     std::shared_ptr<const AssemblyPlan> buildAssemblyPlan(std::size_t n, std::span<const DofList> stencils,
                                                           AssemblyLimits limits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::assembly::buildAssemblyPlan", emberfield::NvtxColor::Green);
         if (!n || !limits.maxDofs_ || !limits.maxStencils_ || !limits.maxLocalEntries_ || !limits.maxNonzeros_) {
             throw std::invalid_argument("组装维度和预算必须为正");
         }
@@ -57,8 +59,11 @@ namespace emberfield::assembly {
                 }
             }
         }
-        std::sort(coordinates.begin(), coordinates.end());
-        coordinates.erase(std::unique(coordinates.begin(), coordinates.end()), coordinates.end());
+        {
+            EMBERFIELD_NVTX_SCOPE("emberfield::assembly::buildAssemblyPlan/sortUnique");
+            std::sort(coordinates.begin(), coordinates.end());
+            coordinates.erase(std::unique(coordinates.begin(), coordinates.end()), coordinates.end());
+        }
         if (coordinates.size() > limits.maxNonzeros_ || !std::in_range<Index>(coordinates.size())) {
             throw std::length_error("规范CSR非零数超限");
         }

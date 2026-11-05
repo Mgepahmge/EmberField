@@ -1,4 +1,5 @@
 /** @file Temporal.cu @brief 时间快照、事件调度及按依赖更新的GPU热组装。 */
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <Simulation/Case/Temporal.cuh>
 #include <algorithm>
@@ -61,11 +62,13 @@ namespace emberfield::problem {
         /** @brief GPU计算一类完整体源向量。@param plan 计划。@param state 数值参数。
          * @pre 同源。@return 设备载荷。@code auto f=volumeLoad(p,s); @endcode */
         Vector<double> volumeLoad(const ThermalAssemblyPlan& plan, const EvaluatedThermalState& state) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::volumeLoad", emberfield::NvtxColor::Yellow);
             const auto& p = *plan.prepared();
             const auto limits = plan.options().gpuLimits_;
             assembly::AssemblyAccumulator result(plan.plan());
             const auto maxBatch = batchSize(plan, p.space()->dimension() == 2 ? 18 : 48);
             for (std::size_t first = 0; first < p.space()->cellCount();) {
+                EMBERFIELD_NVTX_SCOPE("emberfield::problem::volumeLoad/cellBatch");
                 const auto n = std::min(maxBatch, p.space()->cellCount() - first);
                 std::vector<fem::CellIntegrationData> tables;
                 for (std::size_t i = 0; i < n; ++i) {
@@ -101,6 +104,7 @@ namespace emberfield::problem {
          * @code auto h=boundaryValues(p,s,false,true); @endcode */
         assembly::AssemblyValues boundaryValues(const ThermalAssemblyPlan& plan, const EvaluatedThermalState& state,
                                                 bool flux, bool matrix) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::boundaryValues", emberfield::NvtxColor::Yellow);
             const auto& p = *plan.prepared();
             const auto& terms = p.conditions()->naturalTerms();
             const auto& boundaries = p.bound()->data().definition_.boundaries_;
@@ -116,6 +120,7 @@ namespace emberfield::problem {
                     ++n;
                 }
                 if (isFlux == flux) {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::problem::boundaryValues/boundaryBatch");
                     std::vector<std::size_t> rows(n);
                     std::iota(rows.begin(), rows.end(), first);
                     auto batch = evaluateBoundaryBatch(p, rows, plan.options().gpuLimits_, &state);
@@ -138,6 +143,7 @@ namespace emberfield::problem {
     } // namespace
     std::shared_ptr<const ThermalEvolutionPlan> buildThermalEvolutionPlan(std::shared_ptr<const PreparedThermalCase> p,
                                                                           ThermalAssemblyOptions options) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildThermalEvolutionPlan", emberfield::NvtxColor::Yellow);
         if (!p || !p->bound()->data().definition_.time_) {
             throw std::invalid_argument("演化计划需要已准备瞬态算例");
         }
@@ -166,6 +172,7 @@ namespace emberfield::problem {
         return result;
     }
     EvaluatedThermalState evaluateThermalState(std::shared_ptr<const ThermalEvolutionPlan> plan, double time) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::evaluateThermalState", emberfield::NvtxColor::Yellow);
         if (!plan || !std::isfinite(time)) {
             throw std::invalid_argument("时间快照参数非法");
         }
@@ -213,6 +220,8 @@ namespace emberfield::problem {
         return result;
     }
     ThermalTimeCursor::ThermalTimeCursor(std::shared_ptr<const ThermalEvolutionPlan> plan) : plan_(std::move(plan)) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalTimeCursor::ThermalTimeCursor",
+                                    emberfield::NvtxColor::Yellow);
         if (!plan_) {
             throw std::invalid_argument("时间游标计划为空");
         }
@@ -230,6 +239,7 @@ namespace emberfield::problem {
         planned_ = probe.completed_;
     }
     std::optional<TimeStep> ThermalTimeCursor::peek() const {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalTimeCursor::peek", emberfield::NvtxColor::Yellow);
         const auto& t = *plan_->assemblyPlan()->prepared()->bound()->data().definition_.time_;
         if (current_ == t.end_) {
             return {};
@@ -246,6 +256,7 @@ namespace emberfield::problem {
         return TimeStep{completed_ + 1, current_, end, end - current_};
     }
     void ThermalTimeCursor::accept(const TimeStep& step) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalTimeCursor::accept", emberfield::NvtxColor::Yellow);
         auto expected = peek();
         if (!expected || expected->index_ != step.index_ || expected->start_ != step.start_ ||
             expected->end_ != step.end_ || expected->duration_ != step.duration_) {
@@ -279,6 +290,8 @@ namespace emberfield::problem {
     };
     ThermalEvolutionContext::ThermalEvolutionContext(std::shared_ptr<const ThermalEvolutionPlan> plan) :
         impl_(std::make_unique<Impl>()) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalEvolutionContext::ThermalEvolutionContext",
+                                    emberfield::NvtxColor::Yellow);
         if (!plan) {
             throw std::invalid_argument("演化上下文计划为空");
         }
@@ -308,6 +321,8 @@ namespace emberfield::problem {
     ThermalEvolutionContext::ThermalEvolutionContext(ThermalEvolutionContext&&) noexcept = default;
     ThermalEvolutionContext& ThermalEvolutionContext::operator=(ThermalEvolutionContext&&) noexcept = default;
     ThermalNumericState ThermalEvolutionContext::assemble(const EvaluatedThermalState& state) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::ThermalEvolutionContext::assemble",
+                                    emberfield::NvtxColor::Yellow);
         if (!impl_ || !state.plan() || state.plan() != impl_->plan_) {
             throw std::invalid_argument("时间组装来源错配");
         }
@@ -332,12 +347,15 @@ namespace emberfield::problem {
         auto revision = c.revision_;
         const bool sourceChanged = !c.last_ || state.sources() != c.last_->sources();
         if (sourceChanged) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateSource");
             volume = std::make_shared<const Vector<double>>(volumeLoad(plan, state));
         }
         if (fluxChanged) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateFlux");
             flux = std::make_shared<const Vector<double>>(boundaryValues(plan, state, true, false).load_);
         }
         if (hChanged || ambientChanged) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateConvection");
             auto values = boundaryValues(plan, state, false, hChanged);
             ambient = std::make_shared<const Vector<double>>(std::move(values.load_));
             if (hChanged) {
@@ -350,6 +368,7 @@ namespace emberfield::problem {
         }
         auto load = c.load_;
         if (sourceChanged || fluxChanged || hChanged || ambientChanged) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateLoad");
             load = std::make_shared<const Vector<double>>(linalg::add(linalg::add(*volume, *flux), *ambient));
             systems::validateSystemValues(*spatial, *load);
         }
@@ -374,6 +393,7 @@ namespace emberfield::problem {
     }
     systems::LinearSystem buildThermalStepSystem(const ThermalNumericState& numeric, const Vector<double>& previous,
                                                  const EvaluatedThermalState& old, const TimeStep& step) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildThermalStepSystem", emberfield::NvtxColor::Yellow);
         const auto& state = numeric.parameters();
         const auto& model = numeric.model();
         if (state.plan() != old.plan() || old.time() != step.start_ || state.time() != step.end_ ||

@@ -2,6 +2,7 @@
  * @brief 提供独立的小规模主机端带主元 LU 分解与缓存求解接口。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <cmath>
 namespace emberfield::linalg {
@@ -27,6 +28,7 @@ namespace emberfield::linalg {
         template <CsrIndex I>
         explicit CoarseLu(const CsrMatrix<T, I>& matrix) :
             n_(matrix.rowCount()), lu_(emberfield::detail::checkedProduct(n_, n_), 0), pivots_(n_), rhs_(n_) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::CoarseLu::CoarseLu", emberfield::NvtxColor::Cyan);
             if (!n_ || n_ != matrix.columnCount()) {
                 throw std::invalid_argument("Coarse LU requires a nonempty square matrix");
             }
@@ -78,6 +80,7 @@ namespace emberfield::linalg {
          * @pre 长度等于粗层维度且设备一致。@note 无返回值。@code coarse.apply(b, x); @endcode
          */
         void apply(const Vector<T>& rhs, Vector<T>& x) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::CoarseLu::apply", emberfield::NvtxColor::Cyan);
             if (rhs.size() != n_ || x.size() != n_) {
                 throw std::invalid_argument("Coarse LU vector shape mismatch");
             }

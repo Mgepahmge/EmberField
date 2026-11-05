@@ -3,6 +3,7 @@
  */
 #include <IO/Case/Case.cuh>
 #include <IO/Case/ResourceLimits.cuh>
+#include <NVTXProfiler.cuh>
 #define PICOJSON_USE_INT64
 #include <algorithm>
 #include <charconv>
@@ -63,6 +64,7 @@ namespace emberfield::io {
          * @param text 原文。@pre 经过字节限额检查。
          * @note 无返回值；失败抛InputFailure。@code lexicalCheck(text); @endcode */
         void lexicalCheck(const std::string& text) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::lexicalCheck", emberfield::NvtxColor::Orange);
             // picojson保留int64但会将溢出整数退化为double，预检阻止这种有损转换。
             for (std::size_t i = 0; i < text.size();) {
                 const auto c = static_cast<unsigned char>(text[i]);
@@ -296,6 +298,7 @@ namespace emberfield::io {
              * @pre 无。@return 完整候选策略；未知键、非法类型和非正数抛InputFailure。
              * @code auto limits=decoder.resourceLimits(root); @endcode */
             ResourceLimits resourceLimits(const Json& root) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::Decoder::resourceLimits", emberfield::NvtxColor::Orange);
                 object(root, "",
                        {"schemaVersion", "case", "mesh", "space", "preparation", "assembly", "integration", "output"});
                 if (integer(required(root, "schemaVersion", ""), "/schemaVersion") != 1) {
@@ -564,6 +567,7 @@ namespace emberfield::io {
             }
         };
         CaseDefinition Decoder::decode(const Json& root) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::Decoder::decode", emberfield::NvtxColor::Orange);
             object(root, "",
                    {"schemaVersion", "name", "description", "mesh", "analysis", "materials", "materialAssignments",
                     "sources", "boundaries", "boundaryPolicy", "initialState", "time", "discretization", "linearSolver",
@@ -982,6 +986,7 @@ namespace emberfield::io {
     } // namespace
     CaseReadResult readCase(std::istream& input, const std::filesystem::path& baseDirectory, std::string source,
                             problem::CaseLimits limits, const problem::OutputLimitOverrides& outputLimits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::readCase", emberfield::NvtxColor::Orange);
         problem::validateLimits(limits);
         if (!baseDirectory.is_absolute()) {
             throw std::invalid_argument("配置基目录必须为绝对路径");
@@ -1078,6 +1083,7 @@ namespace emberfield::io {
     }
     CaseReadResult loadCase(const std::filesystem::path& path, problem::CaseLimits limits,
                             const problem::OutputLimitOverrides& outputLimits) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::loadCase", emberfield::NvtxColor::Orange);
         problem::validateLimits(limits);
         std::error_code ec;
         const auto absolute = std::filesystem::absolute(path, ec);
@@ -1100,6 +1106,7 @@ namespace emberfield::io {
     }
 
     problem::ResourceLimits readResourceLimits(std::istream& input, std::string source) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::readResourceLimits", emberfield::NvtxColor::Orange);
         const CaseLimits parserLimits;
         std::string text;
         std::map<std::string, SourceLocation> locations;
@@ -1142,6 +1149,7 @@ namespace emberfield::io {
         }
     }
     problem::ResourceLimits loadResourceLimits(const std::filesystem::path& path) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::io::loadResourceLimits", emberfield::NvtxColor::Orange);
         std::ifstream input(path, std::ios::binary);
         if (!input) {
             throw std::runtime_error(path.string() + ": IO_ERROR: 无法打开资源配置");

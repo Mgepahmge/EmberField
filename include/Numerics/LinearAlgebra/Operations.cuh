@@ -4,6 +4,7 @@
 #pragma once
 #include <DataStructure/Storage/DenseMatrix.cuh>
 #include <DataStructure/Storage/Vector.cuh>
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/Backend.cuh>
 #include <algorithm>
 #include <initializer_list>
@@ -44,6 +45,7 @@ namespace emberfield::linalg {
          */
         template <BufferElement T>
         std::vector<T> hostCopy(const CudaBuffer<T>& buffer) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::hostCopy", emberfield::NvtxColor::Cyan);
             std::vector<T> values(buffer.size());
             buffer.copyToHost(values);
             return values;
@@ -53,6 +55,7 @@ namespace emberfield::linalg {
          */
         template <BufferElement T>
         CudaBuffer<T> deviceCopy(const CudaBuffer<T>& buffer) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::deviceCopy", emberfield::NvtxColor::Cyan);
             CudaBuffer<T> result(buffer.size());
             result.copyDataFrom(buffer);
             return result;
@@ -61,12 +64,14 @@ namespace emberfield::linalg {
          * @pre 外部访问已同步。@return 主机数组。@code auto host = hostCopy(x); @endcode */
         template <BufferElement T>
         std::vector<T> hostCopy(const Vector<T>& vector) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::hostCopy", emberfield::NvtxColor::Cyan);
             return hostCopy(vector.values());
         }
         /** @brief 显式复制向量的内部存储至 global。@tparam T 元素类型。@param vector 来源。
          * @pre 当前设备为所属设备。@return 设备缓冲区。@code auto copy = deviceCopy(x); @endcode */
         template <BufferElement T>
         CudaBuffer<T> deviceCopy(const Vector<T>& vector) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::deviceCopy", emberfield::NvtxColor::Cyan);
             return deviceCopy(vector.values());
         }
         /** @brief 将设备输出清零。@tparam T 精度。@param pointer 设备地址。@param count 元素数。
@@ -74,6 +79,7 @@ namespace emberfield::linalg {
          */
         template <Scalar T>
         void zero(T* pointer, std::size_t count) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::zero", emberfield::NvtxColor::Cyan);
             if (count == 0) {
                 return;
             }
@@ -93,6 +99,7 @@ namespace emberfield::linalg {
          */
         template <CsrIndex Out, Scalar T, CsrIndex I>
         CsrMatrix<T, Out> canonical(const CsrMatrix<T, I>& matrix) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::canonical", emberfield::NvtxColor::Cyan);
             if (!std::in_range<Out>(matrix.rowCount()) || !std::in_range<Out>(matrix.columnCount()) ||
                 !std::in_range<Out>(matrix.nonZeroCount())) {
                 throw std::length_error("Sparse operation exceeds its structural index range");
@@ -131,6 +138,7 @@ namespace emberfield::linalg {
          */
         template <Scalar T, CsrIndex I>
         CsrMatrix<T, I> emptySparse(std::size_t rows, std::size_t columns, MemoryStrategy strategy) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::emptySparse", emberfield::NvtxColor::Cyan);
             if (rows == 0 && columns == 0) {
                 CsrMatrix<T, I> result;
                 result.changeMemoryType(strategy);
@@ -150,6 +158,7 @@ namespace emberfield::linalg {
         template <Scalar T, CsrIndex I>
         CsrMatrix<T, I> restoreSparse(std::size_t rows, std::size_t columns, const SparseHostData<T>& data,
                                       MemoryStrategy strategy) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::detail::restoreSparse", emberfield::NvtxColor::Cyan);
             const std::vector<I> offsets(data.offsets_.begin(), data.offsets_.end());
             const std::vector<I> indices(data.columns_.begin(), data.columns_.end());
             return CsrMatrix<T, I>(rows, columns, offsets, indices, data.values_, strategy);
@@ -162,6 +171,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     Vector<T> scale(const Vector<T>& vector, std::type_identity_t<T> factor) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::scale/Vector", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(vector.size());
         detail::OperationScope scope(vector.deviceId());
         Vector<T> result(vector.size());
@@ -178,6 +188,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     Vector<T> add(const Vector<T>& x, const Vector<T>& y, std::type_identity_t<T> beta = T{1}) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::add/Vector", emberfield::NvtxColor::Cyan);
         if (x.size() != y.size()) {
             throw std::invalid_argument("Vector sizes must match");
         }
@@ -197,6 +208,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     Vector<T> subtract(const Vector<T>& x, const Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::subtract/Vector", emberfield::NvtxColor::Cyan);
         return add(x, y, T{-1});
     }
     /** @brief 计算 alpha*x+y。@tparam T 精度。@param alpha 系数。@param x 输入。@param y 输入。
@@ -213,6 +225,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     T dot(const Vector<T>& x, const Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::dot/Vector", emberfield::NvtxColor::Cyan);
         if (x.size() != y.size()) {
             throw std::invalid_argument("Vector sizes must match");
         }
@@ -229,6 +242,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     T multiply(const Vector<T>& x, const Vector<T>& y) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/Vector", emberfield::NvtxColor::Cyan);
         return dot(x, y);
     }
     /** @brief 计算向量二范数。@tparam T 精度。@param vector 输入。
@@ -237,6 +251,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     T norm2(const Vector<T>& vector) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::norm2/Vector", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(vector.size());
         if (!count) {
             return T{};
@@ -250,6 +265,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     T norm1(const Vector<T>& vector) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::norm1/Vector", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(vector.size());
         if (!count) {
             return T{};
@@ -265,6 +281,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     DenseMatrix<T> scale(const DenseMatrix<T>& matrix, std::type_identity_t<T> factor) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::scale/DenseMatrix", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(matrix.values().size());
         detail::OperationScope scope(matrix.values().deviceId());
         DenseMatrix<T> result(matrix.rowCount(), matrix.columnCount());
@@ -281,6 +298,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     DenseMatrix<T> add(const DenseMatrix<T>& a, const DenseMatrix<T>& b, std::type_identity_t<T> beta = T{1}) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::add/DenseMatrix", emberfield::NvtxColor::Cyan);
         if (a.rowCount() != b.rowCount() || a.columnCount() != b.columnCount()) {
             throw std::invalid_argument("Dense matrix shapes must match");
         }
@@ -300,6 +318,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     DenseMatrix<T> subtract(const DenseMatrix<T>& a, const DenseMatrix<T>& b) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::subtract/DenseMatrix", emberfield::NvtxColor::Cyan);
         return add(a, b, T{-1});
     }
     /** @brief 转置稠密矩阵。@tparam T 精度。@param matrix 输入。
@@ -308,6 +327,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     DenseMatrix<T> transpose(const DenseMatrix<T>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::transpose/DenseMatrix", emberfield::NvtxColor::Cyan);
         const int rows = detail::librarySize(matrix.rowCount()), columns = detail::librarySize(matrix.columnCount());
         detail::OperationScope scope(matrix.values().deviceId());
         DenseMatrix<T> result(matrix.columnCount(), matrix.rowCount());
@@ -324,6 +344,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     Vector<T> multiply(const DenseMatrix<T>& matrix, const Vector<T>& vector) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/DenseMatrix", emberfield::NvtxColor::Cyan);
         if (matrix.columnCount() != vector.size()) {
             throw std::invalid_argument("Matrix-vector inner dimensions must match");
         }
@@ -346,6 +367,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     DenseMatrix<T> multiply(const DenseMatrix<T>& a, const DenseMatrix<T>& b) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/DenseMatrix", emberfield::NvtxColor::Cyan);
         if (a.columnCount() != b.rowCount()) {
             throw std::invalid_argument("Matrix inner dimensions must match");
         }
@@ -369,6 +391,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T>
     T frobeniusNorm(const DenseMatrix<T>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::frobeniusNorm/DenseMatrix", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(matrix.values().size());
         if (!count) {
             return T{};
@@ -385,6 +408,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> scale(const CsrMatrix<T, I>& matrix, std::type_identity_t<T> factor) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::scale/CsrMatrix", emberfield::NvtxColor::Cyan);
         const int count = detail::librarySize(matrix.nonZeroCount());
         detail::OperationScope scope(matrix.rowOffsets().deviceId());
         auto result = matrix;
@@ -402,6 +426,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     Vector<T> multiply(const CsrMatrix<T, I>& matrix, const Vector<T>& vector) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/CsrMatrix", emberfield::NvtxColor::Cyan);
         if (matrix.columnCount() != vector.size()) {
             throw std::invalid_argument("Sparse matrix-vector inner dimensions must match");
         }
@@ -424,6 +449,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     DenseMatrix<T> multiply(const CsrMatrix<T, I>& matrix, const DenseMatrix<T>& dense) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/CsrMatrix", emberfield::NvtxColor::Cyan);
         if (matrix.columnCount() != dense.rowCount()) {
             throw std::invalid_argument("Sparse-dense inner dimensions must match");
         }
@@ -448,6 +474,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> add(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b, std::type_identity_t<T> beta = T{1}) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::add/CsrMatrix", emberfield::NvtxColor::Cyan);
         if (a.rowCount() != b.rowCount() || a.columnCount() != b.columnCount()) {
             throw std::invalid_argument("CSR shapes must match");
         }
@@ -468,6 +495,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> subtract(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::subtract/CsrMatrix", emberfield::NvtxColor::Cyan);
         return add(a, b, T{-1});
     }
     /** @brief 用 cuSPARSE 转置 CSR。@tparam T 精度。@tparam I 索引。@param matrix 输入。
@@ -476,6 +504,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> transpose(const CsrMatrix<T, I>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::transpose/CsrMatrix", emberfield::NvtxColor::Cyan);
         detail::librarySize(matrix.rowCount());
         detail::librarySize(matrix.columnCount());
         detail::librarySize(matrix.nonZeroCount());
@@ -493,6 +522,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     CsrMatrix<T, I> multiply(const CsrMatrix<T, I>& a, const CsrMatrix<T, I>& b) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::multiply/CsrMatrix", emberfield::NvtxColor::Cyan);
         if (a.columnCount() != b.rowCount()) {
             throw std::invalid_argument("Sparse matrix inner dimensions must match");
         }
@@ -515,6 +545,7 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     T frobeniusNorm(const CsrMatrix<T, I>& matrix) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::frobeniusNorm/CsrMatrix", emberfield::NvtxColor::Cyan);
         if (!matrix.nonZeroCount()) {
             return T{};
         }

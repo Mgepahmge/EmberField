@@ -2,6 +2,7 @@
  * @brief 实现不依赖物理组与几何容差的单元侧匹配。
  */
 #include <DataStructure/Mesh/FacetTopology.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -37,6 +38,7 @@ namespace emberfield::mesh {
         }
     } // namespace
     FacetTopology buildFacetTopology(const Mesh& mesh, std::span<const CellRef> active, std::size_t maxFacets) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::mesh::buildFacetTopology", emberfield::NvtxColor::SkyBlue);
         if (!maxFacets) {
             throw std::invalid_argument("侧访问限额必须为正");
         }

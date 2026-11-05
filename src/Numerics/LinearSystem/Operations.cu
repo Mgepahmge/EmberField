@@ -1,6 +1,7 @@
 /** @file Operations.cu
  * @brief GPU校验规范模式、组合后向Euler系数并从原始矩阵同步消元全部规定值。
  */
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <Numerics/LinearSystem/Operations.cuh>
 #include <algorithm>
@@ -142,6 +143,7 @@ namespace emberfield::systems {
         /** @brief 校验规范矩阵。@param a 输入。@pre 无。@note 无返回；非法输入invalid_argument。
          * @code validate(a); @endcode */
         void validate(const Matrix& a) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::validate", emberfield::NvtxColor::Cyan);
             if (!a.rowCount() || a.rowCount() != a.columnCount()) {
                 throw std::invalid_argument("系统需要非空方阵");
             }
@@ -163,6 +165,7 @@ namespace emberfield::systems {
         /** @brief 校验向量形状、设备与有限性。@param x 向量。@param n 维度。@param dev 设备。
          * @pre 无。@note 无返回；非法输入invalid_argument。@code validate(x,n,dev); @endcode */
         void validate(const Vector<double>& x, std::size_t n, int dev) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::validate", emberfield::NvtxColor::Cyan);
             if (x.size() != n) {
                 throw std::invalid_argument("系统向量维度不匹配");
             }
@@ -178,11 +181,13 @@ namespace emberfield::systems {
         }
     } // namespace
     void validateSystemValues(const Matrix& spatial, const Vector<double>& load) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::validateSystemValues", emberfield::NvtxColor::Cyan);
         validate(spatial);
         validate(load, spatial.rowCount(), spatial.rowOffsets().deviceId());
     }
     void validateTemperatureState(const Vector<double>& x, std::span<const std::uint64_t> dofs,
                                   std::span<const double> values) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::validateTemperatureState", emberfield::NvtxColor::Cyan);
         if (!x.size() || dofs.size() != values.size()) {
             throw std::invalid_argument("温度场或约束数组错误");
         }
@@ -206,6 +211,7 @@ namespace emberfield::systems {
     }
     Vector<double> projectTemperatureState(const Vector<double>& x, std::span<const std::uint64_t> dofs,
                                            std::span<const double> values) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::projectTemperatureState", emberfield::NvtxColor::Cyan);
         validateTemperatureState(x, {}, {});
         if (dofs.size() != values.size()) {
             throw std::invalid_argument("温度约束数组错误");
@@ -227,12 +233,14 @@ namespace emberfield::systems {
         return result;
     }
     LinearSystem buildSteadySystem(const Matrix& spatial, const Vector<double>& load) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::buildSteadySystem", emberfield::NvtxColor::Cyan);
         validate(spatial);
         validate(load, spatial.rowCount(), spatial.rowOffsets().deviceId());
         return detail::SystemAccess::make(spatial, load);
     }
     LinearSystem buildBackwardEulerSystem(const Matrix& spatial, const Matrix& capacity, const Vector<double>& load,
                                           const Vector<double>& previous, double dt) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::buildBackwardEulerSystem", emberfield::NvtxColor::Cyan);
         if (!std::isfinite(dt) || dt <= 0) {
             throw std::invalid_argument("实际时间步长必须正有限");
         }
@@ -271,6 +279,7 @@ namespace emberfield::systems {
     }
     LinearSystem applyDirichlet(const LinearSystem& system, std::span<const std::uint64_t> dofs,
                                 std::span<const double> values) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::systems::applyDirichlet", emberfield::NvtxColor::Cyan);
         const auto& old = system.matrix();
         const auto n = old.rowCount();
         device::require(old.values(), old.rowOffsets().deviceId());

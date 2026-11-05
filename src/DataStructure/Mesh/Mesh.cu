@@ -2,6 +2,7 @@
  * @brief 验证宿主网格结构并建立独立于持久标签的连续索引。
  */
 #include <DataStructure/Mesh/Mesh.cuh>
+#include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -31,6 +32,7 @@ namespace emberfield::mesh {
         }
     } // namespace
     Mesh::Mesh(MeshData data) : data_(std::move(data)) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::mesh::Mesh::Mesh", emberfield::NvtxColor::SkyBlue);
         nodeIndices_.reserve(data_.nodes_.size());
         for (Index i = 0; i < data_.nodes_.size(); ++i) {
             const auto& node = data_.nodes_[i];

@@ -1,6 +1,7 @@
 /** @file Preparation.cu
  * @brief 实现事务性阶段准备及常量配置到局部数值运算的适配。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Preparation.cuh>
 #include <Simulation/Case/Temporal.cuh>
 #include <cmath>
@@ -11,6 +12,7 @@ namespace emberfield::problem {
     PreparationResult prepareThermalCase(std::shared_ptr<const BoundCase> b,
                                          std::shared_ptr<const fem::FiniteElementSpace> s,
                                          const PreparationOptions& o) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::prepareThermalCase", emberfield::NvtxColor::Yellow);
         validatePreparationOptions(o, s ? s->dimension() : 2);
         PreparationResult result(o.maxDiagnostics_);
         if (!b || !s) {

@@ -1,6 +1,7 @@
 /** @file GpuElementOperations.cu
  * @brief 实现复用设备积分表的大批量热算子及逐实体错误回传。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Thermal/GpuElementOperations.cuh>
 #include <algorithm>
 #include <cmath>
@@ -44,6 +45,8 @@ namespace emberfield::thermal {
              * @code auto b=upload(tables,limits); @endcode */
             template <GpuIntegrationTable Table>
             static GpuElementBatch upload(std::span<const Table> tables, GpuBatchLimits limits) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::detail::GpuBatchAccess::upload",
+                                            emberfield::NvtxColor::Yellow);
                 if (!limits.maxElements_ || !limits.maxScalars_ || tables.empty()) {
                     throw std::invalid_argument("GPU批必须非空且预算为正");
                 }
@@ -161,6 +164,8 @@ namespace emberfield::thermal {
              * @pre 核函数已启动。@note 同步拷贝；失败抛带母元/侧的EvaluationError。
              * @code verify(b,errors); @endcode */
             static void verify(const GpuElementBatch& b, const CudaBuffer<int>& errors) {
+                EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::detail::GpuBatchAccess::verify",
+                                            emberfield::NvtxColor::Yellow);
                 cudaCheck(cudaGetLastError(), "thermal batch kernel");
                 std::vector<int> host(b.count_);
                 errors.copyToHost(host);
@@ -317,6 +322,7 @@ namespace emberfield::thermal {
     void detail::GpuBatchAccess::run(const GpuElementBatch& b, int op, std::span<const double> coefficient,
                                      std::span<const double> ambient, std::span<const double> scales,
                                      GpuLocalMatrixBatch* matrix, GpuLocalVectorBatch* vector) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::detail::GpuBatchAccess::run", emberfield::NvtxColor::Yellow);
         CudaBuffer<double> c(coefficient), s(scales), t(ambient);
         CudaBuffer<int> errors(b.count_);
         elementKernel<<<gridSize(b.count_), 128>>>(
@@ -328,6 +334,7 @@ namespace emberfield::thermal {
     }
     GpuLocalVectorBatch detail::GpuBatchAccess::add(const GpuElementBatch& b, const GpuLocalVectorBatch& a,
                                                     const GpuLocalVectorBatch& c) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::detail::GpuBatchAccess::add", emberfield::NvtxColor::Yellow);
         same(b, a);
         same(b, c);
         auto result = vector(b);
@@ -345,17 +352,22 @@ namespace emberfield::thermal {
         return detail::GpuBatchAccess::upload(t, limits);
     }
     std::vector<double> GpuLocalMatrixBatch::copyToHost() const {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::GpuLocalMatrixBatch::copyToHost",
+                                    emberfield::NvtxColor::Yellow);
         std::vector<double> host(values_.size());
         values_.copyToHost(host);
         return host;
     }
     std::vector<double> GpuLocalVectorBatch::copyToHost() const {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::GpuLocalVectorBatch::copyToHost",
+                                    emberfield::NvtxColor::Yellow);
         std::vector<double> host(values_.size());
         values_.copyToHost(host);
         return host;
     }
     GpuLocalMatrixBatch integrateConductivityBatch(const GpuElementBatch& b, std::span<const double> k,
                                                    std::span<const double> s) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateConductivityBatch", emberfield::NvtxColor::Yellow);
         detail::GpuBatchAccess::validate(b, k, s, GpuBatchKind::Cell, 1, 2);
         auto r = detail::GpuBatchAccess::matrix(b);
         detail::GpuBatchAccess::run(b, 0, k, {}, s, &r, nullptr);
@@ -363,6 +375,7 @@ namespace emberfield::thermal {
     }
     GpuLocalMatrixBatch integrateCapacityBatch(const GpuElementBatch& b, std::span<const double> c,
                                                std::span<const double> s) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateCapacityBatch", emberfield::NvtxColor::Yellow);
         detail::GpuBatchAccess::validate(b, c, s, GpuBatchKind::Cell, 2, 2);
         auto r = detail::GpuBatchAccess::matrix(b);
         detail::GpuBatchAccess::run(b, 1, c, {}, s, &r, nullptr);
@@ -370,6 +383,7 @@ namespace emberfield::thermal {
     }
     GpuLocalVectorBatch integrateVolumeSourceBatch(const GpuElementBatch& b, std::span<const double> q,
                                                    std::span<const double> s) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateVolumeSourceBatch", emberfield::NvtxColor::Yellow);
         detail::GpuBatchAccess::validate(b, q, s, GpuBatchKind::Cell, 1, 0);
         auto r = detail::GpuBatchAccess::vector(b);
         detail::GpuBatchAccess::run(b, 2, q, {}, s, nullptr, &r);
@@ -377,6 +391,7 @@ namespace emberfield::thermal {
     }
     GpuLocalVectorBatch integrateOutwardFluxBatch(const GpuElementBatch& b, std::span<const double> g,
                                                   std::span<const double> s) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateOutwardFluxBatch", emberfield::NvtxColor::Yellow);
         detail::GpuBatchAccess::validate(b, g, s, GpuBatchKind::Facet, 1, 0);
         auto r = detail::GpuBatchAccess::vector(b);
         detail::GpuBatchAccess::run(b, 3, g, {}, s, nullptr, &r);
@@ -384,6 +399,7 @@ namespace emberfield::thermal {
     }
     GpuConvectionBatch integrateConvectionBatch(const GpuElementBatch& b, std::span<const double> h,
                                                 std::span<const double> t, std::span<const double> s) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateConvectionBatch", emberfield::NvtxColor::Yellow);
         detail::GpuBatchAccess::validate(b, h, s, GpuBatchKind::Facet, 2, 1);
         detail::GpuBatchAccess::validate(b, t, s, GpuBatchKind::Facet, 2, 1);
         auto m = detail::GpuBatchAccess::matrix(b);

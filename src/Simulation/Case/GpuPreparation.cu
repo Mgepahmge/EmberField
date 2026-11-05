@@ -1,6 +1,7 @@
 /** @file GpuPreparation.cu
  * @brief 批量适配物性和条件，所有局部积分及源向量叠加在GPU执行。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/GpuPreparation.cuh>
 #include <Simulation/Case/Temporal.cuh>
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace emberfield::problem {
     } // namespace
     GpuThermalCellTerms evaluateCellBatch(const PreparedThermalCase& p, std::span<const std::size_t> rows,
                                           thermal::GpuBatchLimits limits, const EvaluatedThermalState* state) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::evaluateCellBatch", emberfield::NvtxColor::Yellow);
         if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
             throw std::invalid_argument("GPU体积分参数来源错配");
         }
@@ -29,8 +31,11 @@ namespace emberfield::problem {
         budget(rows.size(), d == 2 ? 18 : 48, limits);
         std::vector<fem::CellIntegrationData> tables;
         tables.reserve(rows.size());
-        for (auto row : rows) {
-            tables.push_back(fem::evaluateCellIntegration(p.geometry(), row, 2));
+        {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::evaluateCellBatch/integrationTables");
+            for (auto row : rows) {
+                tables.push_back(fem::evaluateCellIntegration(p.geometry(), row, 2));
+            }
         }
         auto batch = thermal::uploadCellBatch(tables, limits);
         const auto q = batch.pointCount();
@@ -75,6 +80,7 @@ namespace emberfield::problem {
     }
     GpuThermalBoundaryTerms evaluateBoundaryBatch(const PreparedThermalCase& p, std::span<const std::size_t> rows,
                                                   thermal::GpuBatchLimits limits, const EvaluatedThermalState* state) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::evaluateBoundaryBatch", emberfield::NvtxColor::Yellow);
         if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
             throw std::invalid_argument("GPU侧积分参数来源错配");
         }
@@ -85,17 +91,20 @@ namespace emberfield::problem {
         const bool flux = std::holds_alternative<FluxBoundary>(def.boundaries_.at(first.definitionIndex()).value_);
         std::vector<fem::FacetIntegrationData> tables;
         tables.reserve(rows.size());
-        for (auto row : rows) {
-            const auto& term = c.naturalTerms().at(row);
-            if (std::holds_alternative<FluxBoundary>(def.boundaries_.at(term.definitionIndex()).value_) != flux) {
-                throw std::invalid_argument("同一个GPU边界批必须为相同自然条件类型");
+        {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::evaluateBoundaryBatch/integrationTables");
+            for (auto row : rows) {
+                const auto& term = c.naturalTerms().at(row);
+                if (std::holds_alternative<FluxBoundary>(def.boundaries_.at(term.definitionIndex()).value_) != flux) {
+                    throw std::invalid_argument("同一个GPU边界批必须为相同自然条件类型");
+                }
+                auto table = fem::evaluateFacetIntegration(p.geometry(), term.facetIndex(), 2);
+                if (table.use().cell_ != term.use().cell_ || table.use().localSide_ != term.use().localSide_ ||
+                    table.parentLocalDofs() != term.parentLocalDofs()) {
+                    throw std::logic_error("GPU侧关联不匹配");
+                }
+                tables.push_back(std::move(table));
             }
-            auto table = fem::evaluateFacetIntegration(p.geometry(), term.facetIndex(), 2);
-            if (table.use().cell_ != term.use().cell_ || table.use().localSide_ != term.use().localSide_ ||
-                table.parentLocalDofs() != term.parentLocalDofs()) {
-                throw std::logic_error("GPU侧关联不匹配");
-            }
-            tables.push_back(std::move(table));
         }
         auto batch = thermal::uploadFacetBatch(tables, limits);
         const auto q = batch.pointCount();

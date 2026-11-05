@@ -1,6 +1,7 @@
 /** @file Assembly.cu
  * @brief 按固定体/侧顺序调用独立GPU积分和通用散加接口。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Case/Assembly.cuh>
 #include <algorithm>
 #include <numeric>
@@ -36,6 +37,7 @@ namespace emberfield::problem {
     } // namespace detail
     std::shared_ptr<const ThermalAssemblyPlan> buildThermalAssemblyPlan(std::shared_ptr<const PreparedThermalCase> p,
                                                                         ThermalAssemblyOptions o) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::buildThermalAssemblyPlan", emberfield::NvtxColor::Yellow);
         if (!p || !o.batchElements_ || !o.gpuLimits_.maxElements_ || !o.gpuLimits_.maxScalars_) {
             throw std::invalid_argument("组装上下文及批预算必须有效");
         }
@@ -59,6 +61,7 @@ namespace emberfield::problem {
         return detail::ThermalAssemblyAccess::plan(std::move(p), std::move(graph), o);
     }
     AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::assembleThermalModel", emberfield::NvtxColor::Yellow);
         if (!plan) {
             throw std::invalid_argument("热组装计划为空");
         }
@@ -76,6 +79,7 @@ namespace emberfield::problem {
             mass.emplace(plan->plan());
         }
         for (std::size_t first = 0; first < count;) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::assembleThermalModel/cellBatch");
             const auto n = std::min(cellBatch, count - first);
             std::vector<std::size_t> rows(n);
             std::iota(rows.begin(), rows.end(), first);
@@ -92,6 +96,7 @@ namespace emberfield::problem {
         const auto sideBatch = std::min({o.batchElements_, o.gpuLimits_.maxElements_,
                                          o.gpuLimits_.maxScalars_ / (p.space()->dimension() == 2 ? 4u : 9u)});
         for (std::size_t first = 0; first < terms.size();) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::problem::assembleThermalModel/boundaryBatch");
             const auto type = definitions[terms[first].definitionIndex()].value_.index();
             std::size_t n = 1;
             while (n < std::min(sideBatch, terms.size() - first) &&

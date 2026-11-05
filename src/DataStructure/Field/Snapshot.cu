@@ -2,6 +2,7 @@
  * @brief 实现类型化数组、UTF-8文本、可视化拓扑与快照的完整性检查。
  */
 #include <DataStructure/Field/Snapshot.cuh>
+#include <NVTXProfiler.cuh>
 #include <cmath>
 #include <limits>
 #include <set>
@@ -73,6 +74,7 @@ namespace emberfield::field {
             values_);
     }
     void NumericArray::validate() const {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::field::NumericArray::validate", emberfield::NvtxColor::SkyBlue);
         validateText(name_);
         validateText(unit_);
         if (name_.empty() || !components_ || tuples_ > std::numeric_limits<std::uint64_t>::max() / components_) {
@@ -105,6 +107,8 @@ namespace emberfield::field {
         points_(std::move(points)), offsets_(std::move(offsets)), connectivity_(std::move(connectivity)),
         layouts_(std::move(layouts)), pointIdentity_(std::move(pointIdentity)), cellIdentity_(std::move(cellIdentity)),
         metadata_(std::move(metadata)) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::field::VisualizationGrid::VisualizationGrid",
+                                    emberfield::NvtxColor::SkyBlue);
         if (points_.empty() || layouts_.empty() || offsets_.size() != layouts_.size() + 1 || offsets_.front() != 0 ||
             offsets_.back() != connectivity_.size()) {
             throw std::invalid_argument("输出网格为空或CSR形状非法");
@@ -138,6 +142,7 @@ namespace emberfield::field {
                                  std::vector<NumericArray> cells) :
         grid_(std::move(grid)), step_(step), time_(time), kind_(kind), pointFields_(std::move(points)),
         cellFields_(std::move(cells)) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::field::FieldSnapshot::FieldSnapshot", emberfield::NvtxColor::SkyBlue);
         if (!grid_ || (time_ && !std::isfinite(*time_)) ||
             (kind_ != SampleKind::Initial && kind_ != SampleKind::Accepted)) {
             throw std::invalid_argument("场快照来源或状态非法");

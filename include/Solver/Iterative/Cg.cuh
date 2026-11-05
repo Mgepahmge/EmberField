@@ -2,6 +2,7 @@
  * @brief 通过独立线性代数及预条件接口实现预条件共轭梯度法。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Solver/Iterative/Solver.cuh>
 #include <Solver/Preconditioner/Identity.cuh>
@@ -60,6 +61,7 @@ namespace emberfield {
          * @pre 设备可用，满足预条件子要求；正定性由调用方保证。
          * @note 无返回值；失败撤销旧就绪状态。@code solver.setup(a); @endcode */
         void setup(const CsrMatrix<T, I>& matrix) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Cg::setup", emberfield::NvtxColor::Magenta);
             state_.reset();
             iteration::validateMatrix(matrix);
             linalg::detail::OperationScope scope(matrix.rowOffsets().deviceId());
@@ -75,6 +77,7 @@ namespace emberfield {
          * @throws std::invalid_argument 尺寸或设备不匹配。
          * @code auto report = solver.apply(b, x); @endcode */
         SolveResult<T> apply(const Vector<T>& rhs, Vector<T>& x) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Cg::apply", emberfield::NvtxColor::Magenta);
             if (!state_) {
                 throw std::logic_error("CG requires setup");
             }
@@ -105,6 +108,7 @@ namespace emberfield {
          * @pre 状态完整。@return 校验后的终止报告。
          * @code return finish(status, k, normB, tolerance); @endcode */
         SolveResult<T> finish(SolveStatus status, int iterations, T normB, T tolerance) {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Cg::finish", emberfield::NvtxColor::Magenta);
             auto& s = *state_;
             s.context_.residual(s.rhs_, s.x_, s.r_);
             const T residual = s.context_.norm(s.r_);
@@ -123,6 +127,7 @@ namespace emberfield {
          * @pre 状态完整且数学契约满足。@return 使用真实残差的报告。
          * @code auto report = solve(); @endcode */
         SolveResult<T> solve() {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Cg::solve", emberfield::NvtxColor::Magenta);
             auto& s = *state_;
             auto& op = s.context_;
             const T normB = op.norm(s.rhs_);
@@ -138,6 +143,7 @@ namespace emberfield {
             T previousRho = 0;
             bool fresh = true;
             for (int k = 0; k < options_.maxIterations_; ++k) {
+                EMBERFIELD_NVTX_SCOPE("emberfield::Cg::iteration");
                 const int iterations = k + 1;
                 preconditioner_->apply(s.r_, s.z_);
                 const T rho = op.dot(s.r_, s.z_);
@@ -178,6 +184,7 @@ namespace emberfield {
                     return finish(SolveStatus::NonFinite, iterations, normB, tolerance);
                 }
                 if (residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0) {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::Cg::residualRefresh");
                     op.residual(s.rhs_, s.x_, s.r_);
                     residual = op.norm(s.r_);
                     if (!std::isfinite(residual) || residual <= tolerance) {

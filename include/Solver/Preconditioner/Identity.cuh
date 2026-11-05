@@ -2,6 +2,7 @@
  * @brief 提供无预条件变换的独立预条件子，便于组件替换与算法验证。
  */
 #pragma once
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationValidation.cuh>
 #include <Solver/Preconditioner/Preconditioner.cuh>
 #include <cmath>
@@ -16,6 +17,7 @@ namespace emberfield {
          * @pre 非空有限值方阵。@note 无返回值。@code identity.setup(a); @endcode
          */
         void setup(const CsrMatrix<T, I>& matrix) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Identity::setup", emberfield::NvtxColor::Magenta);
             iteration::validateMatrix(matrix);
             for (const T value : linalg::detail::hostCopy(matrix.values())) {
                 if (!std::isfinite(value)) {
@@ -29,6 +31,7 @@ namespace emberfield {
          * @pre setup 成功，尺寸设备匹配。@note 无返回值。@code identity.apply(b, z); @endcode
          */
         void apply(const Vector<T>& rhs, Vector<T>& x) override {
+            EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::Identity::apply", emberfield::NvtxColor::Magenta);
             if (!size_) {
                 throw std::logic_error("Identity requires setup");
             }

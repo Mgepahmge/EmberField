@@ -1,6 +1,7 @@
 /** @file PostprocessOperations.cu
  * @brief 有界批次的CUDA场重建和积分，不包含求解流程或文件操作。
  */
+#include <NVTXProfiler.cuh>
 #include <Simulation/Thermal/PostprocessOperations.cuh>
 #include <algorithm>
 #include <cmath>
@@ -145,6 +146,7 @@ namespace emberfield::thermal {
         }
     } // namespace
     std::vector<P1CellValue> evaluateP1Gradient(std::span<const P1CellSample> cells, const Vector<double>& t) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::evaluateP1Gradient", emberfield::NvtxColor::Yellow);
         device(t);
         if (cells.empty()) {
             return {};
@@ -182,6 +184,7 @@ namespace emberfield::thermal {
     }
     std::vector<std::array<double, 3>> applyFourierLaw(std::span<const std::array<double, 3>> g,
                                                        std::span<const double> k) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::applyFourierLaw", emberfield::NvtxColor::Yellow);
         if (g.size() != k.size()) {
             throw std::invalid_argument("Fourier数组不等长");
         }
@@ -214,6 +217,7 @@ namespace emberfield::thermal {
         return result;
     }
     std::vector<double> integrateBoundaryPowerBatch(std::span<const BoundaryPowerSample> s, const Vector<double>& t) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::integrateBoundaryPowerBatch", emberfield::NvtxColor::Yellow);
         device(t);
         if (s.empty()) {
             return {};
@@ -243,6 +247,7 @@ namespace emberfield::thermal {
         return result;
     }
     double sumValues(const Vector<double>& x, std::span<const std::uint64_t> selected) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::sumValues", emberfield::NvtxColor::Yellow);
         device(x);
         const auto n = selected.empty() ? x.size() : selected.size();
         if (!n) {
@@ -265,6 +270,7 @@ namespace emberfield::thermal {
         return finite(value);
     }
     RegionStatistics reduceRegion(std::span<const P1CellValue> values, std::span<const double> volumes) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::reduceRegion", emberfield::NvtxColor::Yellow);
         if (values.empty() || values.size() != volumes.size()) {
             throw std::invalid_argument("非法区域批");
         }
@@ -291,6 +297,7 @@ namespace emberfield::thermal {
     }
     std::vector<double> interpolateTemperature(std::span<const TemperatureSample> samples,
                                                const Vector<double>& temperature) {
+        EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::interpolateTemperature", emberfield::NvtxColor::Yellow);
         device(temperature);
         if (samples.empty()) {
             return {};
