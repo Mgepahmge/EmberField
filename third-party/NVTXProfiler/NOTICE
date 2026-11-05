@@ -1,0 +1,14 @@
+NVTXProfiler
+
+Adapted from T-BLAEQ, src/utils/NVTXProfiler.cuh,
+revision 1a54d5d3837c677ba2bef9d991fc40c93cc63836.
+Copyright 2026 Mingyu Wang, Ankang Xie, Song Wang, Chen Wang.
+Licensed under the Apache License, Version 2.0; see LICENSE in this directory.
+
+EmberField modifications:
+project namespace and documentation; compile-time disabled annotation macros;
+fixed-name default path and optional thread-local call numbering; ARGB palette;
+non-copyable/non-movable stack scopes; macro-local unique identifiers.
+
+The adapted header is include/NVTXProfiler.cuh.
+The upstream source includes no NVTXProfiler-specific NOTICE entries.

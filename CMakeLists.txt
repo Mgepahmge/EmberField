@@ -18,6 +18,7 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 find_package(CUDAToolkit 12.0 REQUIRED)
 option(EMBERFIELD_BUILD_EXAMPLES "Build EmberField examples" ON)
+option(EMBERFIELD_ENABLE_NVTX "Enable NVTX profiling ranges" OFF)
 
 add_library(emberfield STATIC src/version.cu src/DataStructure/Storage/Memory.cu src/DataStructure/Storage/CsrMatrix.cu src/Numerics/LinearAlgebra/Backend.cu src/Numerics/LinearAlgebra/IterationContext.cu src/IO/Matrix/MatrixMarket.cu src/Solver/Preconditioner/Amg.cu src/DataStructure/Mesh/Mesh.cu src/IO/Mesh/Msh.cu
     src/Simulation/Case/Diagnostics.cu src/Simulation/Case/Validation.cu src/Simulation/Case/Region.cu src/Simulation/Case/Binding.cu src/DataStructure/Mesh/FacetTopology.cu src/IO/Case/Case.cu
@@ -39,6 +40,21 @@ target_include_directories(emberfield PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(emberfield PUBLIC cxx_std_20 cuda_std_20)
 target_link_libraries(emberfield PUBLIC CUDA::cudart CUDA::cublas CUDA::cusparse)
+if(EMBERFIELD_ENABLE_NVTX)
+    set(emberfieldHasNvtx FALSE)
+    foreach(cudaInclude IN LISTS CUDAToolkit_INCLUDE_DIRS)
+        if(EXISTS "${cudaInclude}/nvtx3/nvToolsExt.h")
+            set(emberfieldHasNvtx TRUE)
+        endif()
+    endforeach()
+    if(NOT emberfieldHasNvtx)
+        message(FATAL_ERROR "EMBERFIELD_ENABLE_NVTX requires nvtx3/nvToolsExt.h in the CUDA Toolkit include directory")
+    endif()
+    target_compile_definitions(emberfield PUBLIC EMBERFIELD_ENABLE_NVTX)
+    if(CMAKE_DL_LIBS)
+        target_link_libraries(emberfield PUBLIC ${CMAKE_DL_LIBS})
+    endif()
+endif()
 foreach(cudaInclude IN LISTS CUDAToolkit_INCLUDE_DIRS)
     if(EXISTS "${cudaInclude}/cccl/cub/cub.cuh")
         target_include_directories(emberfield PRIVATE "${cudaInclude}/cccl")
@@ -96,6 +112,8 @@ install(FILES third-party/CLI11/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/lic
 install(FILES third-party/CLI11/CLI11.hpp DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party/CLI11)
 install(FILES third-party/picojson/picojson.h DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party/picojson)
 install(FILES third-party/README.md DESTINATION ${CMAKE_INSTALL_DATADIR}/EmberField/third-party)
+install(FILES third-party/NVTXProfiler/LICENSE third-party/NVTXProfiler/NOTICE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/EmberField/NVTXProfiler)
 install(EXPORT EmberFieldTargets NAMESPACE EmberField:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/EmberField)
 configure_package_config_file(cmake/EmberFieldConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/EmberFieldConfig.cmake"

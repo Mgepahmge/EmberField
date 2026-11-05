@@ -2,6 +2,7 @@
 #include <IO/Case/Case.cuh>
 #include <IO/Mesh/Msh.cuh>
 #include <IO/Result/Archive.cuh>
+#include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <Simulation/Case/Run.cuh>
 #include <Simulation/Case/System.cuh>
@@ -137,6 +138,7 @@ namespace emberfield::problem {
     } // namespace
     int runCase(const std::filesystem::path& input, const std::filesystem::path& output,
                 const volatile std::sig_atomic_t* interrupted, const ResourceLimits& limits) {
+        EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase");
         const auto started = Clock::now();
         std::unique_ptr<io::ResultArchive> archive;
         bool outputStage = false, solveCompleted = false;

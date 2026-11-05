@@ -260,3 +260,5 @@ int main() {
 ~~~
 
 上面第二段只用退出码表示预期输入错误；实际程序还应输出 read.diagnostics_、binding.diagnostics_、space.diagnostics_ 里的诊断。完整的组装和求解调用见 [solve-case.cu](../example/Simulation/solve-case.cu)。读取、绑定、空间构建各自只发布完整成功对象；调用者应先检查结果再访问。程序化构造 CaseDefinition 时先调用 validateCase，不能把解析成功视为几何、离散和求解能力已经全部得到证明。
+
+性能分析使用可选的[NVTX作用域标签](profiling.md)，其中说明构建开关、公共宏与Nsight Systems采集方式。
