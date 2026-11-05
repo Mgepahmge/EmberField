@@ -2,6 +2,7 @@
  * @brief 实现事务性阶段准备及常量配置到局部数值运算的适配。
  */
 #include <Simulation/Case/Preparation.cuh>
+#include <Simulation/Case/Temporal.cuh>
 #include <cmath>
 #include "../Thermal/LocalResultAccess.cuh"
 #include "ConditionSupport.cuh"
@@ -66,7 +67,11 @@ namespace emberfield::problem {
         }
         return result;
     }
-    ThermalCellTerms evaluateCellTerms(const PreparedThermalCase& p, std::size_t row) {
+    ThermalCellTerms evaluateCellTerms(const PreparedThermalCase& p, std::size_t row,
+                                       const EvaluatedThermalState* state) {
+        if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
+            throw std::invalid_argument("CPU体积分快照来源错配");
+        }
         const auto t = fem::evaluateCellIntegration(p.geometry(), row, 2);
         const auto& def = p.bound()->data().definition_;
         const auto& c = *p.conditions();
@@ -83,7 +88,7 @@ namespace emberfield::problem {
         std::vector<double> load(t.dofCount(), 0);
         for (auto j = c.sourceOffsets().at(row); j < c.sourceOffsets().at(row + 1); ++j) {
             const auto& source = def.sources_.at(c.sourceIndices().at(j));
-            samples.assign(q, evaluate(source.value_));
+            samples.assign(q, state ? state->sources().at(c.sourceIndices().at(j)) : evaluate(source.value_));
             const auto term = thermal::integrateVolumeSource(t, samples, scale);
             for (std::size_t a = 0; a < load.size(); ++a) {
                 load[a] += term[a];
@@ -97,7 +102,10 @@ namespace emberfield::problem {
                                 thermal::detail::LocalResultAccess::vector(t.dofCount(), std::move(load)));
     }
     std::variant<thermal::LocalVector, thermal::ConvectionContribution>
-    evaluateBoundaryTerm(const PreparedThermalCase& p, std::size_t index) {
+    evaluateBoundaryTerm(const PreparedThermalCase& p, std::size_t index, const EvaluatedThermalState* state) {
+        if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
+            throw std::invalid_argument("CPU自然积分快照来源错配");
+        }
         const auto& term = p.conditions()->naturalTerms().at(index);
         const auto t = fem::evaluateFacetIntegration(p.geometry(), term.facetIndex(), 2);
         if (t.use().cell_ != term.use().cell_ || t.use().localSide_ != term.use().localSide_ ||
@@ -107,12 +115,21 @@ namespace emberfield::problem {
         const auto& value = p.bound()->data().definition_.boundaries_.at(term.definitionIndex()).value_;
         const double scale = detail::thermalSectionScale(p);
         if (const auto* flux = std::get_if<FluxBoundary>(&value)) {
-            return thermal::integrateOutwardFlux(t, std::vector<double>(t.pointCount(), evaluate(flux->flux_)), scale);
+            return thermal::integrateOutwardFlux(
+                t,
+                std::vector<double>(t.pointCount(),
+                                    state ? state->primary().at(term.definitionIndex()) : evaluate(flux->flux_)),
+                scale);
         }
         if (const auto* convection = std::get_if<ConvectionBoundary>(&value)) {
-            return thermal::integrateConvection(
-                t, std::vector<double>(t.pointCount(), evaluate(convection->coefficient_)),
-                std::vector<double>(t.pointCount(), evaluate(convection->ambientTemperature_)), scale);
+            return thermal::integrateConvection(t,
+                                                std::vector<double>(t.pointCount(),
+                                                                    state ? state->primary().at(term.definitionIndex())
+                                                                          : evaluate(convection->coefficient_)),
+                                                std::vector<double>(t.pointCount(),
+                                                                    state ? state->ambient().at(term.definitionIndex())
+                                                                          : evaluate(convection->ambientTemperature_)),
+                                                scale);
         }
         throw std::logic_error("自然侧项包含规定温度");
     }

@@ -272,7 +272,9 @@ namespace emberfield::problem {
                     const auto* ta = std::get_if<TemperatureBoundary>(&a);
                     const auto* tb = std::get_if<TemperatureBoundary>(&b);
                     if (ta && tb) {
-                        if (evaluate(ta->temperature_) != evaluate(tb->temperature_)) {
+                        if (!equivalentFields(ta->temperature_, tb->temperature_,
+                                              definition.time_ ? definition.time_->start_ : 0,
+                                              definition.time_ ? definition.time_->end_ : 0)) {
                             issue(diagnostics, "TEMPERATURE_CONFLICT", path, "同侧温度条件不一致", boundary.id_);
                         }
                     }

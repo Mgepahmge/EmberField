@@ -12,6 +12,9 @@ namespace emberfield::problem {
             std::all_of(components_.begin(), components_.end(), [](const ComponentCheck& c) { return c.anchored(); });
     }
     SolvabilityReport checkThermalSolvability(const AssembledThermalModel& m, double relative, double absolute) {
+        if (hasTimeDependentFields(m.plan()->prepared()->bound()->data().definition_)) {
+            throw std::invalid_argument("静态可解性接口不接受时变模型；瞬态正容量在演化系统工厂处理");
+        }
         if (!std::isfinite(relative) || !std::isfinite(absolute) || relative < 0 || absolute < 0) {
             throw std::invalid_argument("载荷平衡容差必须非负有限");
         }

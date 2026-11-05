@@ -2,6 +2,7 @@
  * @brief 批量适配物性和条件，所有局部积分及源向量叠加在GPU执行。
  */
 #include <Simulation/Case/GpuPreparation.cuh>
+#include <Simulation/Case/Temporal.cuh>
 #include <algorithm>
 #include <cmath>
 #include "ThermalSampling.cuh"
@@ -20,7 +21,10 @@ namespace emberfield::problem {
         }
     } // namespace
     GpuThermalCellTerms evaluateCellBatch(const PreparedThermalCase& p, std::span<const std::size_t> rows,
-                                          thermal::GpuBatchLimits limits) {
+                                          thermal::GpuBatchLimits limits, const EvaluatedThermalState* state) {
+        if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
+            throw std::invalid_argument("GPU体积分参数来源错配");
+        }
         const auto d = p.space()->dimension();
         budget(rows.size(), d == 2 ? 18 : 48, limits);
         std::vector<fem::CellIntegrationData> tables;
@@ -59,7 +63,8 @@ namespace emberfield::problem {
                 const auto begin = c.sourceOffsets()[rows[e]], end = c.sourceOffsets()[rows[e] + 1];
                 if (slot < end - begin) {
                     const auto& source = def.sources_.at(c.sourceIndices()[begin + slot]);
-                    std::fill_n(sources.begin() + e * q, q, evaluate(source.value_));
+                    std::fill_n(sources.begin() + e * q, q,
+                                state ? state->sources().at(c.sourceIndices()[begin + slot]) : evaluate(source.value_));
                 }
             }
             auto contribution = thermal::integrateVolumeSourceBatch(batch, sources, scales);
@@ -69,7 +74,10 @@ namespace emberfield::problem {
                                    std::move(load));
     }
     GpuThermalBoundaryTerms evaluateBoundaryBatch(const PreparedThermalCase& p, std::span<const std::size_t> rows,
-                                                  thermal::GpuBatchLimits limits) {
+                                                  thermal::GpuBatchLimits limits, const EvaluatedThermalState* state) {
+        if (state && (!state->plan() || state->plan()->assemblyPlan()->prepared().get() != &p)) {
+            throw std::invalid_argument("GPU侧积分参数来源错配");
+        }
         budget(rows.size(), p.space()->dimension() == 2 ? 4 : 9, limits);
         const auto& c = *p.conditions();
         const auto& def = p.bound()->data().definition_;
@@ -97,12 +105,17 @@ namespace emberfield::problem {
             const auto& term = c.naturalTerms()[rows[e]];
             const auto& value = def.boundaries_[term.definitionIndex()].value_;
             if (flux) {
-                std::fill_n(samples.begin() + e * q, q, evaluate(std::get<FluxBoundary>(value).flux_));
+                std::fill_n(samples.begin() + e * q, q,
+                            state ? state->primary().at(term.definitionIndex())
+                                  : evaluate(std::get<FluxBoundary>(value).flux_));
             }
             else {
                 const auto& convection = std::get<ConvectionBoundary>(value);
-                std::fill_n(samples.begin() + e * q, q, evaluate(convection.coefficient_));
-                std::fill_n(ambient.begin() + e * q, q, evaluate(convection.ambientTemperature_));
+                std::fill_n(samples.begin() + e * q, q,
+                            state ? state->primary().at(term.definitionIndex()) : evaluate(convection.coefficient_));
+                std::fill_n(ambient.begin() + e * q, q,
+                            state ? state->ambient().at(term.definitionIndex())
+                                  : evaluate(convection.ambientTemperature_));
             }
         }
         if (flux) {

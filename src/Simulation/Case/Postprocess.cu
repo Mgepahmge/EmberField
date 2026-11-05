@@ -6,6 +6,7 @@
 #include <Simulation/Case/Postprocess.cuh>
 #include <Simulation/Case/Region.cuh>
 #include <Simulation/Case/System.cuh>
+#include <Simulation/Case/Temporal.cuh>
 #include <Simulation/Thermal/PostprocessOperations.cuh>
 #include <algorithm>
 #include <cmath>
@@ -140,11 +141,28 @@ namespace emberfield::problem {
         std::shared_ptr<const field::VisualizationGrid> grid_; ///< 静态可视化网格。
         std::vector<thermal::P1CellSample> cells_; ///< 单元GPU批上传源。
         std::vector<thermal::BoundaryPowerSample> boundary_; ///< 已积分自然功率项。
+        std::vector<thermal::BoundaryPowerSample> boundaryUnits_; ///< 单位h迹积分，通量使用面积。
+        std::vector<double> boundaryAreas_; ///< 自然侧面积乘二维厚度。
         std::vector<std::size_t> boundaryDefinitions_; ///< 功率项定义行。
         std::vector<Resolved> monitors_; ///< 静态定位。
         std::vector<std::size_t> order_; ///< AABB叶子行顺序。
         std::vector<Box> boxes_; ///< AABB树。
         double sourcePower_{}; ///< 体源积分总功率。
+        bool requiresTime_{}; ///< 物理定义含时间表，禁止省略快照。
+        /** @brief 校验快照并借用对应约束。@param state 当前参数或空。@pre 同源。
+         * @return g数组。@code auto& g=s.constraints(state); @endcode */
+        const std::vector<double>& constraints(const EvaluatedThermalState* state) const {
+            if (state) {
+                if (!state->plan() || state->plan()->assemblyPlan()->prepared() != prepared_) {
+                    throw std::invalid_argument("后处理时间快照来源错配");
+                }
+                return state->constraints();
+            }
+            if (requiresTime_) {
+                throw std::invalid_argument("时变后处理必须提供参数快照");
+            }
+            return prepared_->conditions()->constraints().temperatures();
+        }
         /** @brief 建立平衡AABB树。@param first 起始叶。@param end 结束叶。@pre 非空段。@return 树节点。@code auto
          * root=tree(0,n); @endcode */
         std::size_t tree(std::size_t first, std::size_t end) {
@@ -245,6 +263,12 @@ namespace emberfield::problem {
             bytes(points, 192) > limits.maxHostBytes_ - bytes(count, 1400)) {
             throw std::length_error("后处理主机预算不足");
         }
+        const auto baseBytes = bytes(count, 1400) + bytes(points, 192);
+        if (bytes(p.conditions()->naturalTerms().size(),
+                  2 * sizeof(thermal::BoundaryPowerSample) + sizeof(double) + sizeof(std::size_t)) >
+            limits.maxHostBytes_ - baseBytes) {
+            throw std::length_error("后处理自然边界缓存超过主机预算");
+        }
         const auto batch = std::min(count, limits.batchCells_);
         const auto nnz = bytes(count, 16); // P1局部条目上界，仅预算估计，不创建矩阵。
         if (bytes(batch, 1024) > limits.maxDeviceBytes_ ||
@@ -301,7 +325,9 @@ namespace emberfield::problem {
                     : problem::evaluate(*mat.density_) * problem::evaluate(*mat.specificHeat_);
             }
             for (auto j = p.conditions()->sourceOffsets()[row]; j < p.conditions()->sourceOffsets()[row + 1]; ++j) {
-                sample.source_ += problem::evaluate(def.sources_[p.conditions()->sourceIndices()[j]].value_);
+                const auto& field = def.sources_[p.conditions()->sourceIndices()[j]].value_;
+                s.requiresTime_ |= std::holds_alternative<TimeTableScalar>(field);
+                sample.source_ += problem::evaluate(field, def.time_ ? def.time_->start_ : 0);
             }
             s.sourcePower_ += sample.source_ * sample.volume_;
             s.cells_.push_back(sample);
@@ -345,27 +371,46 @@ namespace emberfield::problem {
         for (const auto& term : p.conditions()->naturalTerms()) {
             const auto table = fem::evaluateFacetIntegration(p.geometry(), term.facetIndex(), 2);
             thermal::BoundaryPowerSample sample{};
+            thermal::BoundaryPowerSample unit{};
+            double area = 0;
             sample.count_ = term.globalDofs().size();
             for (unsigned a = 0; a < sample.count_; ++a) {
                 sample.dofs_[a] = term.globalDofs()[a];
+                unit.dofs_[a] = term.globalDofs()[a];
             }
+            unit.count_ = sample.count_;
             const auto& value = def.boundaries_[term.definitionIndex()].value_;
             for (std::size_t q = 0; q < table.pointCount(); ++q) {
                 const double w = table.physicalWeights()[q] * scale;
+                area += w;
+                for (unsigned a = 0; a < sample.count_; ++a) {
+                    unit.weights_[a] += w * table.traceValues()[q * sample.count_ + a];
+                }
                 if (const auto* f = std::get_if<FluxBoundary>(&value)) {
-                    sample.constant_ += w * problem::evaluate(f->flux_);
+                    s.requiresTime_ |= std::holds_alternative<TimeTableScalar>(f->flux_);
+                    sample.constant_ += w * problem::evaluate(f->flux_, def.time_ ? def.time_->start_ : 0);
                 }
                 else {
                     const auto& h = std::get<ConvectionBoundary>(value);
-                    const double hValue = problem::evaluate(h.coefficient_);
-                    sample.constant_ -= w * hValue * problem::evaluate(h.ambientTemperature_);
+                    s.requiresTime_ |= std::holds_alternative<TimeTableScalar>(h.coefficient_) ||
+                        std::holds_alternative<TimeTableScalar>(h.ambientTemperature_);
+                    const double hValue = problem::evaluate(h.coefficient_, def.time_ ? def.time_->start_ : 0);
+                    sample.constant_ -=
+                        w * hValue * problem::evaluate(h.ambientTemperature_, def.time_ ? def.time_->start_ : 0);
                     for (unsigned a = 0; a < sample.count_; ++a) {
                         sample.weights_[a] += w * hValue * table.traceValues()[q * sample.count_ + a];
                     }
                 }
             }
             s.boundary_.push_back(sample);
+            s.boundaryUnits_.push_back(unit);
+            s.boundaryAreas_.push_back(area);
             s.boundaryDefinitions_.push_back(term.definitionIndex());
+        }
+        for (const auto& boundary : def.boundaries_) {
+            if (const auto* g = std::get_if<TemperatureBoundary>(&boundary.value_)) {
+                s.requiresTime_ |= std::holds_alternative<TimeTableScalar>(g->temperature_);
+            }
         }
         if (std::any_of(def.output_.monitors_.begin(), def.output_.monitors_.end(),
                         [](const MonitorDefinition& x) { return std::holds_alternative<PointMonitor>(x.value_); })) {
@@ -453,7 +498,9 @@ namespace emberfield::problem {
                     J(O{{"cellCount", J(std::to_string(r.rows_.size()))}, {"volumeM3", J(volume)}});
             }
             const auto additional = bytes(r.rows_.size() + r.dofs_.size() + r.weights_.size() + 64, 32);
-            const auto base = bytes(count, 1400) + bytes(points, 192);
+            const auto base = bytes(count, 1400) + bytes(points, 192) +
+                bytes(p.conditions()->naturalTerms().size(),
+                      2 * sizeof(thermal::BoundaryPowerSample) + sizeof(double) + sizeof(std::size_t));
             if (additional > limits.maxHostBytes_ - base - monitorBytes) {
                 throw std::length_error("监测定位缓存超出主机预算");
             }
@@ -477,12 +524,16 @@ namespace emberfield::problem {
     }
     field::FieldSnapshot ThermalPostprocessPlan::evaluateThermalFields(const Vector<double>& temperature,
                                                                        std::uint64_t step, std::optional<double> time,
-                                                                       bool initial) {
+                                                                       bool initial,
+                                                                       const EvaluatedThermalState* state) {
         auto& s = *impl_;
         const auto& def = s.prepared_->bound()->data().definition_;
         const auto& output = def.output_;
         systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
-                                          s.prepared_->conditions()->constraints().temperatures());
+                                          s.constraints(state));
+        if (state && (!time || *time != state->time())) {
+            throw std::invalid_argument("后处理场时间错配");
+        }
         const auto n = s.cells_.size();
         if (temperature.size() != s.grid_->pointCount() || def.time_.has_value() != time.has_value() ||
             (time && !std::isfinite(*time)) || (initial && (!def.time_ || step != 0))) {
@@ -524,12 +575,13 @@ namespace emberfield::problem {
                                     initial ? field::SampleKind::Initial : field::SampleKind::Accepted,
                                     std::move(pointFields), std::move(cellFields));
     }
-    std::vector<MonitorValue> ThermalPostprocessPlan::evaluateMonitors(const Vector<double>& temperature) {
+    std::vector<MonitorValue> ThermalPostprocessPlan::evaluateMonitors(const Vector<double>& temperature,
+                                                                       const EvaluatedThermalState* state) {
         auto& s = *impl_;
         const auto& def = s.prepared_->bound()->data().definition_;
         const auto& output = def.output_;
         systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
-                                          s.prepared_->conditions()->constraints().temperatures());
+                                          s.constraints(state));
         if (temperature.size() != s.grid_->pointCount()) {
             throw std::invalid_argument("监测温度维度不符");
         }
@@ -597,12 +649,17 @@ namespace emberfield::problem {
     HeatBalanceReport ThermalPostprocessPlan::evaluateHeatBalance(const AssembledThermalModel& model,
                                                                   const Vector<double>& temperature,
                                                                   const Vector<double>* previous,
-                                                                  std::optional<double> dt, bool initial) {
+                                                                  std::optional<double> dt, bool initial,
+                                                                  const EvaluatedThermalState* state,
+                                                                  const EvaluatedThermalState* previousState) {
+        if (model.parameters().get() != state) {
+            throw std::invalid_argument("后处理模型与参数快照身份错配");
+        }
         auto& s = *impl_;
         const auto& def = s.prepared_->bound()->data().definition_;
         const auto& output = def.output_;
         systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
-                                          s.prepared_->conditions()->constraints().temperatures());
+                                          s.constraints(state));
         if (temperature.size() != s.grid_->pointCount() || (previous && previous->size() != temperature.size()) ||
             model.plan()->prepared().get() != s.prepared_.get() ||
             (def.time_ && !initial && (!previous || !dt || !std::isfinite(*dt) || *dt <= 0)) ||
@@ -611,7 +668,12 @@ namespace emberfield::problem {
         }
         if (previous) {
             systems::validateTemperatureState(*previous, s.prepared_->conditions()->constraints().dofs(),
-                                              s.prepared_->conditions()->constraints().temperatures());
+                                              s.constraints(previousState));
+            if (state &&
+                (!previousState || previousState->plan() != state->plan() || state->time() <= previousState->time() ||
+                 *dt != state->time() - previousState->time())) {
+                throw std::invalid_argument("后处理历史时间错配");
+            }
         }
         HeatBalanceReport result;
         if (output.energy_.enabled_) {
@@ -632,28 +694,61 @@ namespace emberfield::problem {
                 }
                 const auto& constraints = s.prepared_->conditions()->constraints().dofs();
                 e.dirichletOutW_ = constraints.empty() ? 0 : -thermal::sumValues(residual, constraints);
-                e.sourcePowerW_ = s.sourcePower_;
-                e.prescribedFluxOutW_ = 0;
-                e.convectionOutW_ = 0;
-                std::vector<double> powers(def.boundaries_.size(), 0);
-                for (std::size_t first = 0; first < s.boundary_.size();) {
-                    const auto count = std::min(output.limits_.batchCells_, s.boundary_.size() - first);
-                    auto power =
-                        thermal::integrateBoundaryPowerBatch(std::span(s.boundary_).subspan(first, count), temperature);
+            }
+            e.sourcePowerW_ = s.sourcePower_;
+            if (state) {
+                *e.sourcePowerW_ = 0;
+                const auto& c = *s.prepared_->conditions();
+                for (std::size_t row = 0; row < s.cells_.size(); ++row) {
+                    for (auto j = c.sourceOffsets()[row]; j < c.sourceOffsets()[row + 1]; ++j) {
+                        *e.sourcePowerW_ += state->sources()[c.sourceIndices()[j]] * s.cells_[row].volume_;
+                    }
+                }
+            }
+            e.prescribedFluxOutW_ = 0;
+            e.convectionOutW_ = 0;
+            std::vector<double> powers(def.boundaries_.size(), 0);
+            for (std::size_t first = 0; first < s.boundary_.size();) {
+                const auto count = std::min(output.limits_.batchCells_, s.boundary_.size() - first);
+                auto samples = std::vector<thermal::BoundaryPowerSample>(s.boundary_.begin() + first,
+                                                                         s.boundary_.begin() + first + count);
+                if (state) {
                     for (std::size_t i = 0; i < count; ++i) {
-                        powers[s.boundaryDefinitions_[first + i]] += power[i];
+                        const auto row = first + i, definition = s.boundaryDefinitions_[row];
+                        samples[i] = s.boundaryUnits_[row];
+                        if (std::holds_alternative<FluxBoundary>(def.boundaries_[definition].value_)) {
+                            std::fill(std::begin(samples[i].weights_), std::end(samples[i].weights_), 0);
+                            samples[i].constant_ = s.boundaryAreas_[row] * state->primary()[definition];
+                        }
+                        else {
+                            for (auto& w : samples[i].weights_) {
+                                w *= state->primary()[definition];
+                            }
+                            samples[i].constant_ =
+                                -s.boundaryAreas_[row] * state->primary()[definition] * state->ambient()[definition];
+                        }
                     }
-                    first += count;
                 }
-                for (std::size_t i = 0; i < def.boundaries_.size(); ++i) {
-                    const auto& b = def.boundaries_[i];
-                    if (std::holds_alternative<TemperatureBoundary>(b.value_)) {
-                        continue;
-                    }
-                    const bool isFlux = std::holds_alternative<FluxBoundary>(b.value_);
-                    (isFlux ? *e.prescribedFluxOutW_ : *e.convectionOutW_) += powers[i];
-                    e.boundaries_.push_back({b.id_, isFlux ? "flux" : "convection", powers[i]});
+                auto power = thermal::integrateBoundaryPowerBatch(samples, temperature);
+                for (std::size_t i = 0; i < count; ++i) {
+                    powers[s.boundaryDefinitions_[first + i]] += power[i];
                 }
+                first += count;
+            }
+            for (std::size_t i = 0; i < def.boundaries_.size(); ++i) {
+                const auto& b = def.boundaries_[i];
+                if (std::holds_alternative<TemperatureBoundary>(b.value_)) {
+                    continue;
+                }
+                const bool isFlux = std::holds_alternative<FluxBoundary>(b.value_);
+                (isFlux ? *e.prescribedFluxOutW_ : *e.convectionOutW_) += powers[i];
+                e.boundaries_.push_back({b.id_, isFlux ? "flux" : "convection", powers[i]});
+            }
+            if (!std::isfinite(*e.sourcePowerW_) || !std::isfinite(*e.prescribedFluxOutW_) ||
+                !std::isfinite(*e.convectionOutW_)) {
+                throw std::overflow_error("热源或自然边界总功率非有限");
+            }
+            if (!initial) {
                 e.boundaries_.push_back({"", "temperature", *e.dirichletOutW_});
                 e.errorW_ = *e.storagePowerW_ + *e.prescribedFluxOutW_ + *e.convectionOutW_ + *e.dirichletOutW_ -
                     *e.sourcePowerW_;
@@ -673,9 +768,14 @@ namespace emberfield::problem {
     ThermalFields ThermalPostprocessPlan::evaluate(const AssembledThermalModel& model,
                                                    const Vector<double>& temperature, const Vector<double>* previous,
                                                    std::optional<double> dt, std::uint64_t step,
-                                                   std::optional<double> time, bool initial, bool includeFrame) {
+                                                   std::optional<double> time, bool initial, bool includeFrame,
+                                                   const EvaluatedThermalState* state,
+                                                   const EvaluatedThermalState* previousState) {
         auto& s = *impl_;
         const auto& definition = s.prepared_->bound()->data().definition_;
+        if (state && (!time || *time != state->time())) {
+            throw std::invalid_argument("后处理记录时刻错配");
+        }
         if (temperature.size() != s.grid_->pointCount() || definition.time_.has_value() != time.has_value() ||
             (time && !std::isfinite(*time)) || (initial && (!definition.time_ || step != 0))) {
             throw std::invalid_argument("结果场身份或维度不符");
@@ -683,7 +783,7 @@ namespace emberfield::problem {
         std::optional<field::FieldSnapshot> snapshot;
         double low = INFINITY, high = -INFINITY;
         if (includeFrame) {
-            snapshot = evaluateThermalFields(temperature, step, time, initial);
+            snapshot = evaluateThermalFields(temperature, step, time, initial, state);
             const auto& nodal = std::get<std::vector<double>>(snapshot->pointFields()[0].values_);
             const auto [minimum, maximum] = std::minmax_element(nodal.begin(), nodal.end());
             low = *minimum;
@@ -691,7 +791,7 @@ namespace emberfield::problem {
         }
         else {
             systems::validateTemperatureState(temperature, s.prepared_->conditions()->constraints().dofs(),
-                                              s.prepared_->conditions()->constraints().temperatures());
+                                              s.constraints(state));
             for (std::size_t first = 0; first < s.cells_.size();) {
                 const auto count = std::min(definition.output_.limits_.batchCells_, s.cells_.size() - first);
                 const auto values = thermal::evaluateP1Gradient(std::span(s.cells_).subspan(first, count), temperature);
@@ -705,8 +805,15 @@ namespace emberfield::problem {
                 first += count;
             }
         }
-        auto monitors = evaluateMonitors(temperature);
-        auto energy = evaluateHeatBalance(model, temperature, previous, dt, initial);
+        auto monitors = evaluateMonitors(temperature, state);
+        auto energy = evaluateHeatBalance(model, temperature, previous, dt, initial, state, previousState);
         return {std::move(snapshot), std::move(energy), std::move(monitors), low, high};
+    }
+    ThermalFields ThermalPostprocessPlan::evaluate(const ThermalNumericState& numeric,
+                                                   const Vector<double>& temperature, const Vector<double>* previous,
+                                                   const EvaluatedThermalState* previousState, std::optional<double> dt,
+                                                   std::uint64_t step, bool initial, bool includeFrame) {
+        return evaluate(numeric.model(), temperature, previous, dt, step, numeric.parameters().time(), initial,
+                        includeFrame, &numeric.parameters(), previousState);
     }
 } // namespace emberfield::problem

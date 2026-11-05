@@ -25,6 +25,8 @@ add_library(emberfield STATIC src/version.cu src/DataStructure/Storage/Memory.cu
     src/FEM/Element/EvaluationError.cu src/FEM/Element/Geometry.cu src/FEM/Element/Quadrature.cu src/FEM/Element/Integration.cu
     src/Simulation/Thermal/ElementOperations.cu src/Simulation/Case/Conditions.cu src/Simulation/Case/Preparation.cu src/Simulation/Thermal/GpuElementOperations.cu src/Simulation/Case/GpuPreparation.cu)
 add_library(EmberField::emberfield ALIAS emberfield)
+target_sources(emberfield PRIVATE src/Simulation/Case/ScalarField.cu)
+target_sources(emberfield PRIVATE src/Simulation/Case/Temporal.cu)
 target_sources(emberfield PRIVATE src/DataStructure/Field/Snapshot.cu src/IO/Result/Vtu.cu src/IO/Result/Pvd.cu)
 target_sources(emberfield PRIVATE src/IO/Case/Write.cu src/Simulation/Thermal/PostprocessOperations.cu)
 target_sources(emberfield PRIVATE src/Simulation/Case/Postprocess.cu)

@@ -3,6 +3,7 @@
  */
 #pragma once
 #include <Simulation/Case/Diagnostics.cuh>
+#include <Simulation/Case/ScalarField.cuh>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -14,15 +15,6 @@
 
 /** @brief 提供类型化物理模型；数值统一使用SI与绝对温度K。 */
 namespace emberfield::problem {
-    /** @brief 常量标量场；未来变体通过ScalarField扩展，不执行脚本。
-     * @code ScalarField field=ConstantScalar{300}; @endcode */
-    struct ConstantScalar {
-        double value_{}; ///< 有限数值，单位由使用位置确定。
-    };
-    using ScalarField = std::variant<ConstantScalar>; ///< 封闭的类型化标量场。
-    /** @brief 计算常量场。@param field 场。@pre 已通过有限性与物理范围校验。
-     * @return 标量值，无分配。@code auto t=evaluate(ScalarField{ConstantScalar{300}}); @endcode */
-    [[nodiscard]] double evaluate(const ScalarField& field) noexcept;
     /** @brief 选择器运算。 */
     enum class RegionKind { PhysicalGroup, Union, Intersection, Difference };
     /** @brief 引用物理组或递归集合，差集operands依次为base与remove。
@@ -226,4 +218,33 @@ namespace emberfield::problem {
         LinearOptions linearSolver_; ///< 恒等预条件、失败终止。
         OutputOptions output_; ///< VTU温度输出意图。
     };
+    /** @brief 检查源与边界是否包含时间函数。@param definition 已验证定义。
+     * @pre 定义合法，材料和初态为常量。@return 任意物理条件包含时间表时为true。
+     * @code if(hasTimeDependentFields(c)) useEvolution(); @endcode */
+    inline bool hasTimeDependentFields(const CaseDefinition& definition) noexcept {
+        for (const auto& source : definition.sources_) {
+            if (std::holds_alternative<TimeTableScalar>(source.value_)) {
+                return true;
+            }
+        }
+        for (const auto& boundary : definition.boundaries_) {
+            if (const auto* g = std::get_if<TemperatureBoundary>(&boundary.value_)) {
+                if (std::holds_alternative<TimeTableScalar>(g->temperature_)) {
+                    return true;
+                }
+            }
+            else if (const auto* q = std::get_if<FluxBoundary>(&boundary.value_)) {
+                if (std::holds_alternative<TimeTableScalar>(q->flux_)) {
+                    return true;
+                }
+            }
+            else if (const auto* h = std::get_if<ConvectionBoundary>(&boundary.value_)) {
+                if (std::holds_alternative<TimeTableScalar>(h->coefficient_) ||
+                    std::holds_alternative<TimeTableScalar>(h->ambientTemperature_)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 } // namespace emberfield::problem

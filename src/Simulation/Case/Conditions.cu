@@ -69,7 +69,8 @@ namespace emberfield::problem {
             if (!prescribed) {
                 continue;
             }
-            const double value = detail::temperature(prescribed->temperature_);
+            const double value =
+                evaluate(prescribed->temperature_, data.definition_.time_ ? data.definition_.time_->start_ : 0);
             for (auto facet : selection.facets_) {
                 if (!unique.emplace(selection.definitionIndex_, facet).second) {
                     continue;
@@ -97,7 +98,13 @@ namespace emberfield::problem {
             std::optional<std::size_t> last;
             for (auto i = begin; i < end; ++i) {
                 const auto& p = proposals[i];
-                if (p.value_ != first.value_) {
+                const auto& firstField =
+                    std::get<TemperatureBoundary>(data.definition_.boundaries_[first.definition_].value_).temperature_;
+                const auto& otherField =
+                    std::get<TemperatureBoundary>(data.definition_.boundaries_[p.definition_].value_).temperature_;
+                if (!equivalentFields(firstField, otherField,
+                                      data.definition_.time_ ? data.definition_.time_->start_ : 0,
+                                      data.definition_.time_ ? data.definition_.time_->end_ : 0)) {
                     failed = true;
                     const auto& a = data.definition_.boundaries_[first.definition_].id_;
                     const auto& id = data.definition_.boundaries_[p.definition_].id_;

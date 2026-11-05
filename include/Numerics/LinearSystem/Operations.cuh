@@ -21,6 +21,10 @@ namespace emberfield::systems {
     void validateTemperatureState(const Vector<double>& state, std::span<const std::uint64_t> dofs,
                                   std::span<const double> values);
     using Matrix = assembly::Matrix; ///< 64位规范CSR。
+    /** @brief 无复制校验空间矩阵及载荷。@param spatial 非空方阵。@param load 等维向量。
+     * @pre 当前设备global。@note 无返回；形状、CSR或非有限值抛invalid_argument，CUDA异常传播。
+     * @code validateSystemValues(s,f); @endcode */
+    void validateSystemValues(const Matrix& spatial, const Vector<double>& load);
     class LinearSystem;
     namespace detail {
         class SystemAccess;

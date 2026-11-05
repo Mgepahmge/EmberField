@@ -4,6 +4,7 @@
 #pragma once
 #include <FEM/Assembly/Operations.cuh>
 #include <Simulation/Case/GpuPreparation.cuh>
+#include <stdexcept>
 /** @brief 物理算例的组装适配，不承担通用稀疏运算。 */
 namespace emberfield::problem {
     /** @brief 有界流式组装选项。@code ThermalAssemblyOptions o; o.batchElements_=256; @endcode */
@@ -43,20 +44,40 @@ namespace emberfield::problem {
     public:
         /** @brief 来源计划，无参数无额外前提。@return 共享只读对象。@code auto p=m.plan(); @endcode */
         const std::shared_ptr<const ThermalAssemblyPlan>& plan() const noexcept { return plan_; }
+        /** @brief 数值来源快照；无参数无前提。@return 静态模型为空，动态模型持有精确参数身份。
+         * @code auto p=m.parameters(); @endcode */
+        const std::shared_ptr<const EvaluatedThermalState>& parameters() const noexcept { return parameters_; }
         /** @brief 空间矩阵，无参数无额外前提。@return S的只读引用。@code auto& s=m.spatial(); @endcode */
-        const assembly::Matrix& spatial() const noexcept { return spatial_; }
+        const assembly::Matrix& spatial() const {
+            if (!spatial_) {
+                throw std::logic_error("热模型已移动");
+            }
+            return *spatial_;
+        }
         /** @brief 一致容量，无参数无额外前提。@return 瞬态有值。@code auto& c=m.capacity(); @endcode */
-        const std::optional<assembly::Matrix>& capacity() const noexcept { return capacity_; }
+        const std::optional<assembly::Matrix>& capacity() const {
+            if (!capacity_) {
+                throw std::logic_error("热模型已移动");
+            }
+            return *capacity_;
+        }
         /** @brief 完整载荷，无参数无额外前提。@return f的只读引用。@code auto& f=m.load(); @endcode */
-        const Vector<double>& load() const noexcept { return load_; }
+        const Vector<double>& load() const {
+            if (!load_) {
+                throw std::logic_error("热模型已移动");
+            }
+            return *load_;
+        }
 
     private:
         friend class detail::ThermalAssemblyAccess;
+        friend class ThermalEvolutionContext;
         AssembledThermalModel() = default; ///< 工厂候选。
         std::shared_ptr<const ThermalAssemblyPlan> plan_; ///< 来源共同所有权。
-        assembly::Matrix spatial_; ///< 未消元导热与对流之和。
-        std::optional<assembly::Matrix> capacity_; ///< 瞬态一致容量。
-        Vector<double> load_; ///< 体源、外向通量和环境载荷。
+        std::shared_ptr<const assembly::Matrix> spatial_; ///< 未消元导热与对流之和，快照共享。
+        std::shared_ptr<const std::optional<assembly::Matrix>> capacity_; ///< 固定一致容量，快照共享。
+        std::shared_ptr<const Vector<double>> load_; ///< 当前完整外载荷。
+        std::shared_ptr<const EvaluatedThermalState> parameters_; ///< 动态来源快照，静态模型为空。
     };
     /** @brief 构建热模型符号映射。@param prepared 已成功准备的上下文。@param options 正预算及批大小。
      * @pre 网格和绑定对象不经可变别名修改。@return 共享只读计划。
@@ -65,7 +86,8 @@ namespace emberfield::problem {
     [[nodiscard]] std::shared_ptr<const ThermalAssemblyPlan>
     buildThermalAssemblyPlan(std::shared_ptr<const PreparedThermalCase> prepared, ThermalAssemblyOptions options = {});
     /** @brief 流式GPU积分并组装完整热模型。@param plan 成功的符号计划。
-     * @pre 当前CUDA设备有效且来源不变。@return 独立拥有S/M/f的模型，只在全部成功后发布。
+     * @pre 当前CUDA设备有效且来源不变；所有源和边界为常量。
+     * @return 只读共享S/M/f的模型，只在全部成功后发布；时变算例使用演化上下文。
      * @throws std::invalid_argument 空计划；积分、数值和CUDA异常传播。
      * @code auto model=assembleThermalModel(plan); @endcode */
     [[nodiscard]] AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan);

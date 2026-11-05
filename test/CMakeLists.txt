@@ -12,6 +12,7 @@ endif()
 
 add_executable(emberfield_tests version_test.cpp DataStructure/Storage/data_structure_test.cpp Numerics/LinearAlgebra/linear_algebra_test.cpp Solver/Iterative/solver_test.cpp Solver/Iterative/cg_test.cpp IO/Matrix/matrix_market_test.cpp DataStructure/Mesh/mesh_test.cpp IO/Mesh/msh_test.cpp Simulation/Case/case_test.cpp IO/Case/case_io_test.cpp)
 target_link_libraries(emberfield_tests PRIVATE EmberField::emberfield GTest::gtest_main)
+target_sources(emberfield_tests PRIVATE Simulation/Case/temporal_test.cpp)
 target_sources(emberfield_tests PRIVATE IO/Result/result_test.cpp)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)

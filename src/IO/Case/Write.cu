@@ -18,7 +18,20 @@ namespace emberfield::io {
             return J(static_cast<std::int64_t>(n));
         }
         /** @brief 标量场回显。@param s 常量场。@pre 有效。@return 场对象。@code auto j=scalar(s); @endcode */
-        J scalar(const ScalarField& s) { return J(O{{"kind", J("constant")}, {"value", J(evaluate(s))}}); }
+        J scalar(const ScalarField& s) {
+            if (std::holds_alternative<ConstantScalar>(s)) {
+                return J(O{{"kind", J("constant")}, {"value", J(evaluate(s))}});
+            }
+            const auto& t = std::get<TimeTableScalar>(s);
+            picojson::array points;
+            for (const auto& p : t.points_) {
+                points.emplace_back(O{{"time", J(p[0])}, {"value", J(p[1])}});
+            }
+            return J(O{{"kind", J("timeTable")},
+                       {"interpolation", J(t.interpolation_ == TimeInterpolation::Linear ? "linear" : "previous")},
+                       {"outside", J(t.outside_ == TimeOutside::Error ? "error" : "hold")},
+                       {"points", J(points)}});
+        }
         /** @brief 选择器递归回显。@param r 有限深度树。@pre 有效。@return 选择器JSON。@code auto j=region(r); @endcode
          */
         J region(const RegionSelector& r) {
@@ -83,7 +96,10 @@ namespace emberfield::io {
             assignments.emplace_back(O{{"id", J(a.id_)}, {"region", region(a.region_)}, {"material", J(a.material_)}});
         }
         for (const auto& s : c.sources_) {
-            sources.emplace_back(O{{"id", J(s.id_)}, {"region", region(s.region_)}, {"value", scalar(s.value_)}});
+            sources.emplace_back(O{{"id", J(s.id_)},
+                                   {"kind", J("volumetric")},
+                                   {"region", region(s.region_)},
+                                   {"value", scalar(s.value_)}});
         }
         for (const auto& b : c.boundaries_) {
             O o{{"id", J(b.id_)}, {"region", region(b.region_)}};
@@ -92,7 +108,7 @@ namespace emberfield::io {
                 o["temperature"] = scalar(t->temperature_);
             }
             else if (const auto* f = std::get_if<FluxBoundary>(&b.value_)) {
-                o["kind"] = J("flux");
+                o["kind"] = J("outwardFlux");
                 o["flux"] = scalar(f->flux_);
             }
             else {

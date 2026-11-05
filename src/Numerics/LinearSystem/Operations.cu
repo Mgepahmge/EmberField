@@ -177,6 +177,10 @@ namespace emberfield::systems {
             }
         }
     } // namespace
+    void validateSystemValues(const Matrix& spatial, const Vector<double>& load) {
+        validate(spatial);
+        validate(load, spatial.rowCount(), spatial.rowOffsets().deviceId());
+    }
     void validateTemperatureState(const Vector<double>& x, std::span<const std::uint64_t> dofs,
                                   std::span<const double> values) {
         if (!x.size() || dofs.size() != values.size()) {

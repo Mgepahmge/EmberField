@@ -477,9 +477,48 @@ namespace emberfield::io {
             /** @brief 解码常量场。@param v 节点。@param p 路径。@pre 无。
              * @return 独立场值；非法抛InputFailure。@code auto f=field(v,p); @endcode */
             ScalarField field(const Json& v, const std::string& p) {
-                object(v, p, {"kind", "value"});
-                literal(required(v, "kind", p), p + "/kind", "constant");
-                return ConstantScalar{number(required(v, "value", p), p + "/value")};
+                const auto kind = text(required(v, "kind", p), p + "/kind");
+                if (kind == "constant") {
+                    object(v, p, {"kind", "value"});
+                    return ConstantScalar{number(required(v, "value", p), p + "/value")};
+                }
+                if (kind != "timeTable") {
+                    fail("UNSUPPORTED_CAPABILITY", p + "/kind", "场类型必须为constant或timeTable");
+                }
+                object(v, p, {"kind", "interpolation", "outside", "points"});
+                TimeTableScalar result;
+                const auto interpolation = text(required(v, "interpolation", p), p + "/interpolation");
+                if (interpolation != "linear" && interpolation != "previous") {
+                    fail("TIME_TABLE_INVALID", p + "/interpolation", "插值必须为linear或previous");
+                }
+                result.interpolation_ =
+                    interpolation == "linear" ? TimeInterpolation::Linear : TimeInterpolation::Previous;
+                if (has(v, "outside")) {
+                    const auto outside = text(v.get("outside"), p + "/outside");
+                    if (outside != "error" && outside != "hold") {
+                        fail("TIME_TABLE_INVALID", p + "/outside", "区间外策略必须为error或hold");
+                    }
+                    result.outside_ = outside == "error" ? TimeOutside::Error : TimeOutside::Hold;
+                }
+                const auto& points = array(required(v, "points", p), p + "/points");
+                for (std::size_t i = 0; i < points.size(); ++i) {
+                    const auto path = p + "/points/" + std::to_string(i);
+                    object(points[i], path, {"time", "value"});
+                    const double time = number(required(points[i], "time", path), path + "/time");
+                    const double value = number(required(points[i], "value", path), path + "/value");
+                    if (!std::isfinite(time) || !std::isfinite(value) ||
+                        (!result.points_.empty() && time <= result.points_.back()[0])) {
+                        fail("TIME_TABLE_INVALID", path, "节点必须有限且时间严格递增");
+                    }
+                    result.points_.push_back({time, value});
+                }
+                try {
+                    validateScalarField(result);
+                }
+                catch (const std::invalid_argument& e) {
+                    fail("TIME_TABLE_INVALID", p, e.what());
+                }
+                return result;
             }
             /** @brief 递归解码类型化选择器。@param v 节点。@param p 路径。
              * @pre JSON递归已经受限，随后仍需静态检查选择器深度。

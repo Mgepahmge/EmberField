@@ -490,7 +490,14 @@ namespace emberfield::io {
               {"input",
                J(O{{"caseFile", J(fs::absolute(input).generic_string())},
                    {"meshFile", J(c.mesh_.path_.generic_string())},
-                   {"effectiveCase", effective}})},
+                   {"effectiveCase", effective},
+                   {"timeEvaluation",
+                    c.time_ ? J(O{{"sampling", J("backwardEulerRightEndpoint")},
+                                  {"eventAlignment", J("tableKnots")},
+                                  {"nominalStepS", J(c.time_->step_)},
+                                  {"eventCount", J()},
+                                  {"plannedStepCount", J()}})
+                            : J()}})},
               {"mesh",
                J(O{{"dimension", J(static_cast<std::int64_t>(prepared.space()->dimension()))},
                    {"sourceNodeCount", J(std::to_string(d.mesh_->data().nodes_.size()))},
@@ -558,6 +565,20 @@ namespace emberfield::io {
             throw std::invalid_argument("非法运行计时");
         }
         times[stage] = J(seconds);
+    }
+    void ResultArchive::timeEvaluation(std::size_t eventCount, std::size_t plannedStepCount) {
+        auto& s = *impl_;
+        if (!s.transient_ || s.finished_ || s.broken_ || !plannedStepCount) {
+            throw std::logic_error("时间采样记录要求活动瞬态会话及正步数");
+        }
+        auto& info = s.summary_["input"].get<O>()["timeEvaluation"].get<O>();
+        info["eventCount"] = J(std::to_string(eventCount));
+        info["plannedStepCount"] = J(std::to_string(plannedStepCount));
+        s.log("INFO", "TIME_EVALUATION",
+              "步末右连续采样，时间表节点对齐；内部事件=" + std::to_string(eventCount) +
+                  "，预计实际步数=" + std::to_string(plannedStepCount),
+              {});
+        s.commit();
     }
     void ResultArchive::addDiagnostic(const problem::Diagnostic& diagnostic, const std::string& stage) {
         auto& s = *impl_;

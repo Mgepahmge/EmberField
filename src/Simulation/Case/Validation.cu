@@ -10,7 +10,6 @@
 #include <unordered_set>
 
 namespace emberfield::problem {
-    double evaluate(const ScalarField& field) noexcept { return std::get<ConstantScalar>(field).value_; }
     void validateLimits(const CaseLimits& limits) {
         if (!limits.maxBytes_ || !limits.maxValues_ || !limits.maxStringBytes_ || !limits.maxNesting_ ||
             !limits.maxSelectorDepth_ || !limits.maxDiagnostics_) {
@@ -24,6 +23,7 @@ namespace emberfield::problem {
             CaseLimits limits_; ///< 资源限制。
             Diagnostics report_; ///< 结果。
             std::size_t count_{}; ///< 已访问选择器/对象数。
+            const CaseDefinition* definition_{}; ///< 借用算例，供时间覆盖检查。
             /** @brief 初始化独立检查状态。@param limits 正限额。@pre 限额合法。
              * @note 无返回值。@code Checker v(limits); @endcode */
             explicit Checker(CaseLimits limits) : limits_(limits), report_(limits.maxDiagnostics_) {}
@@ -50,11 +50,40 @@ namespace emberfield::problem {
                 }
             }
             /** @brief 检查标量范围。@param field 场。@param path 路径。@param range 0有限、1正、2非负。
-             * @pre range为0至2。@note 无返回值。@code scalar(k,"/conductivity",1); @endcode */
-            void scalar(const ScalarField& field, const std::string& path, int range = 0) {
-                const double value = evaluate(field);
-                if (!std::isfinite(value) || (range == 1 && value <= 0) || (range == 2 && value < 0)) {
-                    error("INVALID_VALUE", path, "字段必须有限并满足物理范围约束");
+             * @param temporal 是否允许瞬态时间表。@pre range为0至2。@note 无返回值。@code scalar(k,"/conductivity",1);
+             * @endcode */
+            void scalar(const ScalarField& field, const std::string& path, int range = 0, bool temporal = false) {
+                try {
+                    validateScalarField(field);
+                }
+                catch (const std::invalid_argument& e) {
+                    error(std::holds_alternative<ConstantScalar>(field) ? "INVALID_VALUE" : "TIME_TABLE_INVALID", path,
+                          e.what());
+                    return;
+                }
+                const auto check = [&](double value, const std::string& p) {
+                    if (!std::isfinite(value) || (range == 1 && value <= 0) || (range == 2 && value < 0)) {
+                        error("INVALID_VALUE", p, "字段必须有限并满足物理范围约束");
+                    }
+                };
+                if (const auto* table = std::get_if<TimeTableScalar>(&field)) {
+                    if (!temporal || definition_->analysis_.type_ != AnalysisType::Transient) {
+                        error("TIME_FIELD_UNSUPPORTED", path, "该字段或稳态分析不允许时间表");
+                    }
+                    if (!record(path, table->points_.size())) {
+                        return;
+                    }
+                    for (std::size_t i = 0; i < table->points_.size(); ++i) {
+                        check(table->points_[i][1], path + "/points/" + std::to_string(i) + "/value");
+                    }
+                    if (definition_->time_ && table->outside_ == TimeOutside::Error &&
+                        (table->points_.front()[0] > definition_->time_->start_ ||
+                         table->points_.back()[0] < definition_->time_->end_)) {
+                        error("TIME_TABLE_COVERAGE", path, "时间表必须覆盖整个运行区间或使用hold");
+                    }
+                }
+                else {
+                    check(evaluate(field), path);
                 }
             }
             /** @brief 检查选择器结构、维数与递归预算。@param r 选择器。@param path 路径。
@@ -109,6 +138,7 @@ namespace emberfield::problem {
     Diagnostics validateCase(const CaseDefinition& c, CaseLimits limits) {
         validateLimits(limits);
         Checker v(limits);
+        v.definition_ = &c;
         // 先检查总记录预算，再建立id集合，避免诊断路径触发不受控的二次分配。
         for (auto size : {c.materials_.size(), c.materialAssignments_.size(), c.sources_.size(), c.boundaries_.size(),
                           c.initialState_ ? c.initialState_->overrides_.size() : std::size_t{0},
@@ -176,9 +206,12 @@ namespace emberfield::problem {
             if (m.volumetricHeatCapacity_) {
                 v.scalar(*m.volumetricHeatCapacity_, p + "/volumetricHeatCapacity", 1);
             }
-            if (m.density_ && m.specificHeat_ &&
-                (!std::isfinite(evaluate(*m.density_) * evaluate(*m.specificHeat_)) ||
-                 evaluate(*m.density_) * evaluate(*m.specificHeat_) <= 0)) {
+            if (m.density_ && m.specificHeat_ && std::holds_alternative<ConstantScalar>(*m.density_) &&
+                std::holds_alternative<ConstantScalar>(*m.specificHeat_) &&
+                (!std::isfinite(std::get<ConstantScalar>(*m.density_).value_ *
+                                std::get<ConstantScalar>(*m.specificHeat_).value_) ||
+                 std::get<ConstantScalar>(*m.density_).value_ * std::get<ConstantScalar>(*m.specificHeat_).value_ <=
+                     0)) {
                 v.error("INVALID_VALUE", p, "体热容量乘积溢出、下溢为零或非正");
             }
             if (c.analysis_.type_ == AnalysisType::Transient && !m.volumetricHeatCapacity_ &&
@@ -203,7 +236,7 @@ namespace emberfield::problem {
             const auto p = "/sources/" + std::to_string(i);
             v.id(s.id_, p + "/id", ids);
             v.selector(s.region_, p + "/region", dimension);
-            v.scalar(s.value_, p + "/value");
+            v.scalar(s.value_, p + "/value", 0, true);
         }
         ids.clear();
         for (std::size_t i = 0; i < c.boundaries_.size(); ++i) {
@@ -212,14 +245,14 @@ namespace emberfield::problem {
             v.id(b.id_, p + "/id", ids);
             v.selector(b.region_, p + "/region", dimension - 1);
             if (const auto* t = std::get_if<TemperatureBoundary>(&b.value_)) {
-                v.scalar(t->temperature_, p + "/temperature", 2);
+                v.scalar(t->temperature_, p + "/temperature", 2, true);
             }
             if (const auto* f = std::get_if<FluxBoundary>(&b.value_)) {
-                v.scalar(f->flux_, p + "/flux");
+                v.scalar(f->flux_, p + "/flux", 0, true);
             }
             if (const auto* h = std::get_if<ConvectionBoundary>(&b.value_)) {
-                v.scalar(h->coefficient_, p + "/coefficient", 2);
-                v.scalar(h->ambientTemperature_, p + "/ambientTemperature", 2);
+                v.scalar(h->coefficient_, p + "/coefficient", 2, true);
+                v.scalar(h->ambientTemperature_, p + "/ambientTemperature", 2, true);
             }
         }
         if (c.naturalOverlap_ != NaturalOverlap::Error && c.naturalOverlap_ != NaturalOverlap::Add) {

@@ -5,6 +5,7 @@
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <Simulation/Case/Run.cuh>
 #include <Simulation/Case/System.cuh>
+#include <Simulation/Case/Temporal.cuh>
 #include <Solver/Iterative/BiCgStab.cuh>
 #include <Solver/Iterative/Cg.cuh>
 #include <algorithm>
@@ -75,16 +76,6 @@ namespace emberfield::problem {
                           << "] s, dt=" << c.time_->step_ << " s (后向 Euler)\n";
             }
             std::cout << "\n[进度] 温度范围单位 K；完整逐步记录见 steps.csv\n" << std::flush;
-        }
-        /** @brief 根据预计步数控制终端进度频率。
-         * @param options 已验证的时间选项。@pre 时间区间和步长有效。
-         * @return 大约每二十四分之一进度的步长，小算例每步展示。
-         * @code auto stride=reportStride(time); @endcode */
-        std::size_t reportStride(const TimeOptions& options) {
-            const auto span = static_cast<long double>(options.end_) - static_cast<long double>(options.start_);
-            const auto count = std::ceil(span / static_cast<long double>(options.step_));
-            const auto capped = std::min(count, static_cast<long double>(options.maxSteps_));
-            return std::max<std::size_t>(1, static_cast<std::size_t>(std::ceil(capped / 24)));
         }
         /** @brief 展示已发布状态的简短进度，不替代结构化结果。
          * @param record 状态记录。@param minimumK 最低温度。@param maximumK 最高温度。
@@ -182,12 +173,42 @@ namespace emberfield::problem {
             const double preparationS = elapsed(stage);
             std::cout << "[准备] 计算单元贡献并组装稀疏矩阵\n" << std::flush;
             stage = Clock::now();
-            auto model = assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared(), limits.assembly_));
-            const double assemblyS = elapsed(stage);
+            const auto& c = binding.bound_->data().definition_;
+            std::shared_ptr<const ThermalEvolutionPlan> evolutionPlan;
+            std::optional<ThermalEvolutionContext> evolution;
+            std::optional<ThermalTimeCursor> cursor;
+            std::optional<EvaluatedThermalState> oldState;
+            std::optional<ThermalNumericState> numeric;
+            if (c.time_) {
+                evolutionPlan = buildThermalEvolutionPlan(prepared.prepared(), limits.assembly_);
+                try {
+                    cursor.emplace(evolutionPlan);
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "[错误] TIME_STEP_BUDGET: " << e.what() << '\n';
+                    return 2;
+                }
+            }
+            auto model = [&] {
+                if (!c.time_) {
+                    return assembleThermalModel(buildThermalAssemblyPlan(prepared.prepared(), limits.assembly_));
+                }
+                oldState = evaluateThermalState(evolutionPlan, c.time_->start_);
+                evolution.emplace(evolutionPlan);
+                numeric = assembleThermalState(*evolution, *oldState);
+                return numeric->model();
+            }();
+            double assemblyS = elapsed(stage);
             std::cout << "[准备] 创建结果目录\n" << std::flush;
             stage = Clock::now();
             outputStage = true;
             archive = std::make_unique<io::ResultArchive>(output, input, model, postprocess);
+            if (cursor) {
+                const auto eventCount =
+                    std::count_if(evolutionPlan->events().begin(), evolutionPlan->events().end(),
+                                  [&](double t) { return t > c.time_->start_ && t < c.time_->end_; });
+                archive->timeEvaluation(static_cast<std::size_t>(eventCount), cursor->plannedSteps());
+            }
             for (const auto& d : loaded.diagnostics_.entries()) {
                 archive->addDiagnostic(d, "input");
             }
@@ -205,11 +226,48 @@ namespace emberfield::problem {
             archive->timing("preparation", preparationS);
             archive->timing("assembly", assemblyS);
             double outputS = elapsed(stage), setupS = 0, solveS = 0, postprocessS = 0;
-            const auto& c = binding.bound_->data().definition_;
             const auto& constraints = prepared.prepared()->conditions()->constraints();
             printCaseSummary(input, binding.bound_->data(), model);
-            const auto stride = c.time_ ? reportStride(*c.time_) : 1;
+            const auto stride = cursor ? std::max<std::size_t>(1, (cursor->plannedSteps() + 23) / 24) : 1;
+            if (cursor && hasTimeDependentFields(c)) {
+                std::size_t linear = 0, previous = 0;
+                const auto count = [&](const ScalarField& f) {
+                    if (const auto* table = std::get_if<TimeTableScalar>(&f)) {
+                        if (table->interpolation_ == TimeInterpolation::Linear) {
+                            ++linear;
+                        }
+                        else {
+                            ++previous;
+                        }
+                    }
+                };
+                for (const auto& source : c.sources_) {
+                    count(source.value_);
+                }
+                for (const auto& boundary : c.boundaries_) {
+                    if (const auto* g = std::get_if<TemperatureBoundary>(&boundary.value_)) {
+                        count(g->temperature_);
+                    }
+                    else if (const auto* q = std::get_if<FluxBoundary>(&boundary.value_)) {
+                        count(q->flux_);
+                    }
+                    else {
+                        const auto& h = std::get<ConvectionBoundary>(boundary.value_);
+                        count(h.coefficient_);
+                        count(h.ambientTemperature_);
+                    }
+                }
+                std::cout << "  时变条件     " << linear << " 线性 / " << previous << " 分段保持\n"
+                          << "  时间采样     步末右连续 / 时间表节点对齐 / " << cursor->plannedSteps() << " 实际步\n";
+                if (previous) {
+                    std::cout << "  提示         跳变处仍存在时间离散误差；事件对齐不等于精确积分\n";
+                }
+                std::cout << std::flush;
+            }
             std::size_t completedSteps = 0;
+            auto iterative = solver(c.linearSolver_);
+            std::optional<std::size_t> setupRevision;
+            std::optional<double> setupDt;
             // 候选经规定值投影和真实残差复核后才接受；历史状态保留至后处理完成。
             auto advance = [&](const systems::LinearSystem& system, const Vector<double>* previous,
                                io::StepRecord record, bool final) -> std::optional<Vector<double>> {
@@ -218,8 +276,12 @@ namespace emberfield::problem {
                 }
                 try {
                     auto tick = Clock::now();
-                    auto iterative = solver(c.linearSolver_);
-                    iterative->setup(system.matrix());
+                    const auto revision = numeric ? numeric->matrixRevision() : 0;
+                    if (!setupRevision || *setupRevision != revision || setupDt != record.dt_) {
+                        iterative->setup(system.matrix());
+                        setupRevision = revision;
+                        setupDt = record.dt_;
+                    }
                     Vector<double> candidate(system.rhs().size());
                     if (previous && c.linearSolver_.initialGuess_ == InitialGuess::PreviousStep) {
                         candidate.copyDataFrom(*previous);
@@ -247,8 +309,9 @@ namespace emberfield::problem {
                         std::cerr << "[错误] 第 " << record.step_ << " 步线性求解未收敛 (" << record.status_ << ")\n";
                         return {};
                     }
-                    candidate =
-                        systems::projectTemperatureState(candidate, constraints.dofs(), constraints.temperatures());
+                    candidate = systems::projectTemperatureState(candidate, constraints.dofs(),
+                                                                 numeric ? numeric->parameters().constraints()
+                                                                         : constraints.temperatures());
                     tick = Clock::now();
                     linalg::IterationContext<double, assembly::Index> check(system.matrix());
                     Vector<double> residual(candidate.size());
@@ -272,8 +335,10 @@ namespace emberfield::problem {
                     archive->accepted(record.step_, record.time_);
                     tick = Clock::now();
                     const bool saveFrame = io::shouldSave(c.output_, c.time_.has_value(), record.step_, final, false);
-                    auto fields = postprocess.evaluate(model, candidate, previous, record.dt_, record.step_,
-                                                       record.time_, false, saveFrame);
+                    auto fields = numeric ? postprocess.evaluate(*numeric, candidate, previous, &*oldState, record.dt_,
+                                                                 record.step_, false, saveFrame)
+                                          : postprocess.evaluate(model, candidate, previous, record.dt_, record.step_,
+                                                                 record.time_, false, saveFrame);
                     record.postprocessS_ = elapsed(tick);
                     postprocessS += record.postprocessS_;
                     outputStage = true;
@@ -313,7 +378,6 @@ namespace emberfield::problem {
                 Vector<double> previous(
                     std::span<const double>(*prepared.prepared()->conditions()->initialTemperature()));
                 double time = c.time_->start_;
-                std::size_t completed = 0;
                 archive->accepted(0, time);
                 io::StepRecord record;
                 record.kind_ = "initial";
@@ -321,7 +385,7 @@ namespace emberfield::problem {
                 record.time_ = time;
                 stage = Clock::now();
                 const bool saveInitial = io::shouldSave(c.output_, true, 0, false, true);
-                auto fields = postprocess.evaluate(model, previous, nullptr, {}, 0, time, true, saveInitial);
+                auto fields = postprocess.evaluate(*numeric, previous, nullptr, nullptr, {}, 0, true, saveInitial);
                 record.postprocessS_ = elapsed(stage);
                 postprocessS += record.postprocessS_;
                 outputStage = true;
@@ -330,20 +394,43 @@ namespace emberfield::problem {
                 outputS += elapsed(stage);
                 outputStage = false;
                 printProgress(record, fields.minimumK_, fields.maximumK_);
-                while (auto step = nextTimeStep(*c.time_, time, completed)) {
+                while (auto step = cursor->peek()) {
+                    if (interrupted && *interrupted) {
+                        throw std::runtime_error("用户请求中断");
+                    }
                     record = io::StepRecord{};
                     record.step_ = step->index_;
                     record.time_ = step->end_;
                     record.dt_ = step->duration_;
-                    auto next = advance(buildThermalStepSystem(model, previous, step->duration_), &previous, record,
-                                        step->end_ == c.time_->end_);
+                    std::optional<EvaluatedThermalState> parameters;
+                    std::optional<systems::LinearSystem> system;
+                    try {
+                        stage = Clock::now();
+                        parameters = evaluateThermalState(evolutionPlan, step->end_);
+                        numeric = assembleThermalState(*evolution, *parameters);
+                        model = numeric->model();
+                        system = buildThermalStepSystem(*numeric, previous, *oldState, *step);
+                        assemblyS += elapsed(stage);
+                        archive->timing("assembly", assemblyS);
+                    }
+                    catch (...) {
+                        record.kind_ = "failedAttempt";
+                        record.status_ = "error";
+                        record.errorCode_ = "TIME_ASSEMBLY_ERROR";
+                        outputStage = true;
+                        archive->publishStep(record, nullptr, false);
+                        outputStage = false;
+                        throw;
+                    }
+                    auto next = advance(*system, &previous, record, step->end_ == c.time_->end_);
                     if (!next) {
                         return 3;
                     }
                     previous = std::move(*next);
                     time = step->end_;
-                    completed = step->index_;
-                    completedSteps = completed;
+                    oldState = std::move(*parameters);
+                    cursor->accept(*step);
+                    completedSteps = step->index_;
                 }
             }
             solveCompleted = true;

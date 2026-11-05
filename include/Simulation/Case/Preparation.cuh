@@ -5,6 +5,7 @@
 #include <Simulation/Case/Conditions.cuh>
 #include <Simulation/Thermal/ElementOperations.cuh>
 namespace emberfield::problem {
+    class EvaluatedThermalState;
     /** @brief 本次准备的独立阶段，不等同完整执行能力。 */
     enum class PreparationStage { Geometry, IntegrationCompatibility, Conditions };
     /** @brief 某阶段未执行、通过或失败。 */
@@ -20,14 +21,18 @@ namespace emberfield::problem {
                                                        std::shared_ptr<const fem::FiniteElementSpace> space,
                                                        const PreparationOptions& options = {});
     /** @brief 计算一行体局部项。@param prepared 联合对象。@param cellRow 活动行。
+     * @param state 同源时刻快照；空值只接受常量体源。
      * @pre 来源不变。@return K、瞬态M及合计体源；数值失败EvaluationError，越界out_of_range。
      * @code auto t=evaluateCellTerms(prepared,0); @endcode */
-    [[nodiscard]] ThermalCellTerms evaluateCellTerms(const PreparedThermalCase& prepared, std::size_t cellRow);
+    [[nodiscard]] ThermalCellTerms evaluateCellTerms(const PreparedThermalCase& prepared, std::size_t cellRow,
+                                                     const EvaluatedThermalState* state = nullptr);
     /** @brief 计算单个自然侧项。@param prepared 联合对象。@param naturalTermIndex 自然关联行。
+     * @param state 同源时刻快照；空值只接受常量自然条件。
      * @pre 来源不变。@return 通量向量或对流组合，数值失败EvaluationError，越界out_of_range。
      * @code auto t=evaluateBoundaryTerm(prepared,0); @endcode */
     [[nodiscard]] std::variant<thermal::LocalVector, thermal::ConvectionContribution>
-    evaluateBoundaryTerm(const PreparedThermalCase& prepared, std::size_t naturalTermIndex);
+    evaluateBoundaryTerm(const PreparedThermalCase& prepared, std::size_t naturalTermIndex,
+                         const EvaluatedThermalState* state = nullptr);
     /** @brief 组合成功几何和条件，不持久保存全部单元矩阵。
      * @code auto p=prepareThermalCase(b,s).prepared(); @endcode */
     class PreparedThermalCase {
@@ -106,7 +111,8 @@ namespace emberfield::problem {
         [[nodiscard]] const thermal::LocalVector& load() const noexcept { return load_; }
 
     private:
-        friend ThermalCellTerms evaluateCellTerms(const PreparedThermalCase&, std::size_t);
+        friend ThermalCellTerms evaluateCellTerms(const PreparedThermalCase&, std::size_t,
+                                                  const EvaluatedThermalState*);
         /** @brief 组合本单元的独立项。@param row 活动行。@param k 导热。
          * @param m 可选容量。@param f 体源合计。@pre 同序同尺寸。
          * @note 无返回值。@code ThermalCellTerms t(row,k,m,f); @endcode */

@@ -39,6 +39,11 @@ namespace emberfield::io {
         /** @brief 记录已完成阶段耗时。@param stage 协议阶段。@param seconds 非负有限秒数。
          * @pre 无并发。@note 无返回值；非法invalid_argument。@code a.timing("input",.1); @endcode */
         void timing(const std::string& stage, double seconds);
+        /** @brief 记录预检时间调度的计数。@param eventCount 去重内部节点数，不含起止。
+         * @param plannedStepCount 预计实际步数。@pre 瞬态会话未结束，计数来自同源游标。
+         * @note 无返回值；非法会话logic_error，IO异常传播。
+         * @code a.timeEvaluation(3,100); @endcode */
+        void timeEvaluation(std::size_t eventCount, std::size_t plannedStepCount);
         /** @brief 追加已有输入/准备诊断，保留警告计数。@param diagnostic 已限制长度的诊断。
          * @param stage 来源阶段。@pre 会话有效。@note 无返回值；IO错误传播。
          * @code a.addDiagnostic(d,"preparation"); @endcode */

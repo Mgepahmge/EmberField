@@ -5,6 +5,8 @@
 #include <DataStructure/Field/Snapshot.cuh>
 #include <Simulation/Case/Assembly.cuh>
 namespace emberfield::problem {
+    class EvaluatedThermalState;
+    class ThermalNumericState;
     /** @brief 单个边界功率。@code BoundaryPower p; @endcode */
     struct BoundaryPower {
         std::string id_; ///< 自然条件id；整体反力为空。
@@ -52,32 +54,50 @@ namespace emberfield::problem {
         std::string monitorDictionary() const;
         /** @brief 独立重建配置所选场，不计算能量或监测。@param temperature 全DOF温度。
          * @param step 步。@param time 瞬态时间。@param initial 初态。
+         * @param state 同源当前参数，时间表算例不可省略。
          * @pre 同源global有限非负状态。@return 拥有场数组的快照，错误不发布部分结果。
          * @code auto f=p.evaluateThermalFields(t,0,{},false); @endcode */
         field::FieldSnapshot evaluateThermalFields(const Vector<double>& temperature, std::uint64_t step,
-                                                   std::optional<double> time, bool initial = false);
+                                                   std::optional<double> time, bool initial = false,
+                                                   const EvaluatedThermalState* state = nullptr);
         /** @brief 独立评估静态监测计划。@param temperature 同源温度。
+         * @param state 同源当前参数，时间表算例不可省略。
          * @pre global有限非负。@return 全部监测值；设备或数值错误传播。
          * @code auto v=p.evaluateMonitors(t); @endcode */
-        std::vector<MonitorValue> evaluateMonitors(const Vector<double>& temperature);
+        std::vector<MonitorValue> evaluateMonitors(const Vector<double>& temperature,
+                                                   const EvaluatedThermalState* state = nullptr);
         /** @brief 独立评估未消元离散热量平衡。@param model 同源模型。
          * @param temperature 当前温度。@param previous 紧邻前态或空。@param dt 实际步长或空。
-         * @param initial 是否给定初态。@pre 瞬态接受态必须有前态和正dt。
+         * @param initial 是否给定初态。@param state 当前物理参数或空。@param previousState 历史物理参数或空。
+         * @pre 瞬态接受态必须有前态和正dt，时间表算例必须提供匹配的快照。
          * @return 完整热量报告，超容差为warning；参数错误invalid_argument。
          * @code auto e=p.evaluateHeatBalance(m,t,&old,.1); @endcode */
         HeatBalanceReport evaluateHeatBalance(const AssembledThermalModel& model, const Vector<double>& temperature,
                                               const Vector<double>* previous, std::optional<double> dt,
-                                              bool initial = false);
+                                              bool initial = false, const EvaluatedThermalState* state = nullptr,
+                                              const EvaluatedThermalState* previousState = nullptr);
         /** @brief 评估完整一帧。@param model 未消元同源模型。@param temperature 接受的global温度。
          * @param previous 瞬态前态，初态/稳态为空。@param dt 实际步长，初态/稳态为空。
          * @param step 步号。@param time 瞬态物理时刻，稳态为空。@param initial 是否初态。
          * @param includeFrame 是否生成完整主机场快照；false时仅回读批次统计与监测。
+         * @param state 同源当前参数或空。@param previousState 同源历史参数或空。
          * @pre 温度有限非负且满足规定值，当前设备一致。@return 全部后处理成功的完整状态。
          * @throws std::invalid_argument 不同源或非法状态；数值、资源、CUDA异常传播。
          * @code auto r=p.evaluate(m,t,&previous,dt,1,time); @endcode */
         ThermalFields evaluate(const AssembledThermalModel& model, const Vector<double>& temperature,
                                const Vector<double>* previous, std::optional<double> dt, std::uint64_t step,
-                               std::optional<double> time, bool initial = false, bool includeFrame = true);
+                               std::optional<double> time, bool initial = false, bool includeFrame = true,
+                               const EvaluatedThermalState* state = nullptr,
+                               const EvaluatedThermalState* previousState = nullptr);
+        /** @brief 评估时变数值状态。@param numeric 当前模型与参数。@param temperature 当前温度。
+         * @param previous 历史温度或空。@param previousState 历史参数或空。@param dt 实际步长或空。
+         * @param step 实际编号。@param initial 是否初态。@param includeFrame 是否生成完整场。
+         * @pre 同来源同设备。@return 完整报告，错配invalid_argument，资源异常传播。
+         * @code auto f=p.evaluate(n,t,&old,&oldState,dt,1); @endcode */
+        ThermalFields evaluate(const ThermalNumericState& numeric, const Vector<double>& temperature,
+                               const Vector<double>* previous, const EvaluatedThermalState* previousState,
+                               std::optional<double> dt, std::uint64_t step, bool initial = false,
+                               bool includeFrame = true);
 
     private:
         struct Impl; ///< 模块内部几何、定位和预算状态。

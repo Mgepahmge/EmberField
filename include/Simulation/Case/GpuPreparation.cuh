@@ -5,23 +5,28 @@
 #include <Simulation/Case/Preparation.cuh>
 #include <Simulation/Thermal/GpuElementOperations.cuh>
 namespace emberfield::problem {
+    class EvaluatedThermalState;
     class GpuThermalCellTerms;
     class GpuThermalBoundaryTerms;
     /** @brief 按输入活动行顺序批量计算体贡献。@param prepared 联合上下文。
      * @param cellRows 非空活动行数组。@param limits 批预算。
+     * @param state 同源物理快照，空值仅支持常量源。
      * @pre Mesh不可变；调用者决定流式分批，当前设备有效。
      * @return 拥有设备K、可选M和体源合计的批；越界/非法形状/数值/CUDA错误传播。
      * @code auto t=evaluateCellBatch(prepared,rows); @endcode */
     [[nodiscard]] GpuThermalCellTerms evaluateCellBatch(const PreparedThermalCase& prepared,
                                                         std::span<const std::size_t> cellRows,
-                                                        thermal::GpuBatchLimits limits = {});
+                                                        thermal::GpuBatchLimits limits = {},
+                                                        const EvaluatedThermalState* state = nullptr);
     /** @brief 同类型自然项批积分。@param prepared 上下文。@param naturalTermIndices 自然项行。
-     * @param limits 批预算。@pre 非空且全部Flux或全部Convection，按原输入行顺序。
+     * @param limits 批预算。@param state 同源物理快照，空值仅支持常量自然条件。
+     * @pre 非空且全部Flux或全部Convection，按原输入行顺序。
      * @return 设备侧贡献；混合类型invalid_argument，数值/CUDA失败传播。
      * @code auto t=evaluateBoundaryBatch(prepared,indices); @endcode */
     [[nodiscard]] GpuThermalBoundaryTerms evaluateBoundaryBatch(const PreparedThermalCase& prepared,
                                                                 std::span<const std::size_t> naturalTermIndices,
-                                                                thermal::GpuBatchLimits limits = {});
+                                                                thermal::GpuBatchLimits limits = {},
+                                                                const EvaluatedThermalState* state = nullptr);
     /** @brief 一批体单元的设备物理贡献与活动行顺序，供GPU装配消费。
      * @code auto t=evaluateCellBatch(p,rows); @endcode */
     class GpuThermalCellTerms {
@@ -38,7 +43,7 @@ namespace emberfield::problem {
 
     private:
         friend GpuThermalCellTerms evaluateCellBatch(const PreparedThermalCase&, std::span<const std::size_t>,
-                                                     thermal::GpuBatchLimits);
+                                                     thermal::GpuBatchLimits, const EvaluatedThermalState*);
         /** @brief 接管完整结果。@param rows 行。@param k K。@param m M。@param f 源。
          * @pre 同源同序。@note 无返回值。@code GpuThermalCellTerms t(rows,k,m,f); @endcode */
         GpuThermalCellTerms(std::vector<std::size_t> rows, thermal::GpuLocalMatrixBatch k,
@@ -66,7 +71,7 @@ namespace emberfield::problem {
 
     private:
         friend GpuThermalBoundaryTerms evaluateBoundaryBatch(const PreparedThermalCase&, std::span<const std::size_t>,
-                                                             thermal::GpuBatchLimits);
+                                                             thermal::GpuBatchLimits, const EvaluatedThermalState*);
         /** @brief 接管侧结果。@param rows 行。@param c 贡献。@pre 同序。
          * @note 无返回值。@code GpuThermalBoundaryTerms t(rows,c); @endcode */
         GpuThermalBoundaryTerms(std::vector<std::size_t> rows, Contribution c) :

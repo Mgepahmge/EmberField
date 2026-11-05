@@ -27,9 +27,9 @@ namespace emberfield::problem {
                                                std::optional<assembly::Matrix> m) {
                 AssembledThermalModel v;
                 v.plan_ = std::move(p);
-                v.spatial_ = std::move(s.matrix_);
-                v.load_ = std::move(s.load_);
-                v.capacity_ = std::move(m);
+                v.spatial_ = std::make_shared<const assembly::Matrix>(std::move(s.matrix_));
+                v.load_ = std::make_shared<const Vector<double>>(std::move(s.load_));
+                v.capacity_ = std::make_shared<const std::optional<assembly::Matrix>>(std::move(m));
                 return v;
             }
         };
@@ -63,6 +63,9 @@ namespace emberfield::problem {
             throw std::invalid_argument("热组装计划为空");
         }
         const auto& p = *plan->prepared();
+        if (hasTimeDependentFields(p.bound()->data().definition_)) {
+            throw std::invalid_argument("时间表算例请使用ThermalEvolutionContext与assembleThermalState");
+        }
         const auto& o = plan->options();
         const auto count = p.space()->cellCount();
         const auto cellBatch = std::min({o.batchElements_, o.gpuLimits_.maxElements_,

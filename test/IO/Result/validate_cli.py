@@ -1,6 +1,7 @@
 """Black-box CLI and published-file checks; --vtk additionally uses an independent VTK reader."""
 import argparse
 import csv
+import copy
 import json
 import math
 import os
@@ -171,6 +172,52 @@ def main():
             rows = list(csv.DictReader(stream))
         assert len(rows) == 4 and rows[0]["kind"] == "initial"
         assert math.isclose(float(rows[-1]["dt_s"]), .05) and float(rows[-1]["time_s"]) == .25
+        temporal = copy.deepcopy(source)
+        temporal["boundaries"] = []
+        temporal["time"]["maxSteps"] = 4
+        temporal["sources"][0]["value"] = {
+            "kind": "timeTable", "interpolation": "linear",
+            "points": [{"time": 0, "value": 0}, {"time": .15, "value": 1170000},
+                       {"time": .25, "value": 1950000}]
+        }
+        temporal["output"].update({"encoding": "ascii", "includeInitial": True,
+                                    "schedule": {"kind": "everySteps", "interval": 1}})
+        time_case = root / "temporal.json"
+        time_case.write_text(json.dumps(temporal), encoding="utf-8")
+        run([binary, time_case, "--output-root", root / "results", "--output", "temporal"], root)
+        time_directory = root / "results/temporal"
+        time_summary = check_directory(time_directory, True, args.vtk)
+        info = time_summary["input"]["timeEvaluation"]
+        assert info["eventCount"] == "1" and info["plannedStepCount"] == "4"
+        assert info["sampling"] == "backwardEulerRightEndpoint"
+        assert time_summary["input"]["effectiveCase"]["sources"][0]["value"]["kind"] == "timeTable"
+        expected, previous_time = 300., 0.
+        for frame in time_summary["frames"]:
+            t = frame["timeS"]
+            expected += 2 * t * (t - previous_time)
+            tree = ET.parse(time_directory / frame["path"])
+            values = tree.find("./UnstructuredGrid/Piece/PointData/DataArray[@Name='temperature']")
+            assert values is not None
+            assert all(math.isclose(float(v), expected, abs_tol=1e-8) for v in values.text.split())
+            previous_time = t
+        temporal["time"]["maxSteps"] = 3
+        time_case.write_text(json.dumps(temporal), encoding="utf-8")
+        rejection = run([binary, time_case, "--output-root", root / "results", "--output", "event-budget"],
+                        root, expected=2)
+        assert "TIME_STEP_BUDGET" in rejection.stderr
+        assert not (root / "results/event-budget").exists()
+        temporal["time"]["maxSteps"] = 4
+        temporal["boundaries"] = [{"id": "overflow", "region": {"kind": "physicalGroup", "dimension": 1, "tag": 22},
+            "kind": "convection", "coefficient": {"kind": "timeTable", "interpolation": "linear",
+                "points": [{"time": 0, "value": 0}, {"time": .25, "value": 1e308}]},
+            "ambientTemperature": {"kind": "constant", "value": 1e308}}]
+        time_case.write_text(json.dumps(temporal), encoding="utf-8")
+        run([binary, time_case, "--output-root", root / "results", "--output", "time-overflow"], root, expected=1)
+        overflow = json.loads((root / "results/time-overflow/run-summary.json").read_text(encoding="utf-8"))
+        assert overflow["status"] == "failed" and overflow["lastAcceptedStep"] == "0"
+        with (root / "results/time-overflow/steps.csv").open(newline="") as stream:
+            attempts = list(csv.DictReader(stream))
+        assert attempts[-1]["kind"] == "failedAttempt"
         source["output"]["includeFinal"] = False
         case.write_text(json.dumps(source), encoding="utf-8")
         run([binary, case, "--output-root", root / "results", "--output", "interval-only"], root)
