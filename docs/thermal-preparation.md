@@ -1,5 +1,10 @@
 # 几何、局部热运算与条件准备
 
+时变算例的几何与条件关联仍只准备一次。evaluateCellTerms/evaluateBoundaryTerm和GPU版本
+evaluateCellBatch/evaluateBoundaryBatch均支持显式EvaluatedThermalState参数，核对精确来源后读取当前Q/q/h/T∞。
+省略快照仅支持所计算物理项为常量的调用；不会隐式选择0秒或起点。
+规定温度的固定DOF及来源CSR与时刻数值分离，共享DOF的全区间曲线相容性在准备阶段检查。
+
 第4—6步在完整配置、网格绑定和连续P1空间之上，提供米制仿射几何、数值积分、独立热运算以及无冲突物理条件。当前支持XY平面Triangle3和三维Tet4、常量标量物性、固定网格。网格模型的表达范围仍大于热离散后端，不自动降阶未知单元。
 
 ## 完整配置入口

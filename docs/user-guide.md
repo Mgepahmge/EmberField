@@ -70,7 +70,22 @@ emberfield --version
 
 ### 材料与热源
 
-所有标量参数目前只接受常数对象，如 {"kind":"constant","value":300}；时间表、空间函数、温度依赖和张量不是当前协议的一部分。
+常量参数写为 {"kind":"constant","value":300}。瞬态热源、规定温度、外向热流、换热系数和环境温度还可使用时间表；材料和初态仍为常量，空间函数、温度依赖与张量尚不支持。
+
+~~~json
+{"kind":"timeTable","interpolation":"linear","outside":"error",
+ "points":[{"time":0,"value":300},{"time":3,"value":303}]}
+~~~
+
+time为绝对秒数，value沿用该物理字段单位。interpolation必填linear（至少2点）或previous（至少1点）；previous在节点取新值。outside默认error，要求覆盖整个运行区间，也可用hold延续首末值。节点必须有限、严格递增，不会自动排序；温度及换热系数非负，热源与热流可负。完整字段与异常说明见[时间表协议](case.md)。
+
+时间表节点插入原有名义时间网格，maxSteps和输出间隔均按实际步数计。每步使用步末右连续值；跳变处存在离散误差，节点对齐并不精确积分跳变载荷，需要时减小time.step。共享规定温度在全运行区间相容，初始温度须满足起点规定值。可直接运行随项目分发的时变示例：
+
+~~~bash
+./build/emberfield example/cases/time-varying.json --output-root ./results --output time-varying
+~~~
+
+该示例在同一网格中包含启停体源、升温边界、变化的外向通量、换热系数和环境温度。无需新增CLI参数。
 
 | 位置 | 字段 | 单位和约束 |
 | --- | --- | --- |

@@ -1,5 +1,18 @@
 # 命令行与结果文件
 
+瞬态运行在run-summary.json的input.timeEvaluation记录时间采样协议；稳态为null。
+
+| 字段 | 类型与含义 |
+| --- | --- |
+| sampling | 字符串backwardEulerRightEndpoint，步末右连续值 |
+| eventAlignment | 字符串tableKnots，合并并插入所有运行区间内时间表节点 |
+| eventCount | 十进制整数字符串，去重后的内部节点数，不含起止点 |
+| nominalStepS | 数字，配置名义步长，单位s |
+| plannedStepCount | 十进制整数字符串，CLI预检的实际步数；未提供调度计数的库会话为null |
+
+effectiveCase保留完整有序时间表；steps.csv的step、time_s、dt_s以及VTU/PVD时间均为实际事件对齐后的状态。
+采样协议与预检计数同时写入run.log。跳变条件的功率和规定温度反力采用离散步区间的解释，不能当作连续时间脉冲的精确积分。
+
 ## 运行算例
 
 ```bash

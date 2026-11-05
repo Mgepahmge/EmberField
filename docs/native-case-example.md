@@ -1,7 +1,7 @@
 # 原生算例示例
 
 项目提供一组可直接运行的 EmberField 原生算例：`example/cases/steady.json`（稳态）、
-`transient.json`（瞬态）和共享网格`plate.msh`。
+`transient.json`（常量条件瞬态）、`time-varying.json`（时变源与边界瞬态）和共享网格`plate.msh`。
 此算例用于演示文件结构及字段之间的关系，不代表特定材料的实验结果。
 
 ## 运行
@@ -11,6 +11,7 @@
 ```bash
 build-output/emberfield example/cases/steady.json --output-root results --output plate-steady
 build-output/emberfield example/cases/transient.json --output-root results --output plate-transient
+build-output/emberfield example/cases/time-varying.json --output-root results --output plate-time-varying
 ```
 
 Windows可执行文件位于`build-output/`对应的配置目录中。算例配置与网格的相对路径

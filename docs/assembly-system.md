@@ -1,5 +1,38 @@
 # 全局稀疏组装与最终线性系统
 
+## 时变物理参数
+
+瞬态运行使用Simulation/Case/Temporal.cuh。buildThermalEvolutionPlan共享固定准备对象与符号计划，
+evaluateThermalState在CPU对各条件求值一次；ThermalEvolutionContext在GPU积分和组装受影响类别，
+assembleThermalState返回不可变ThermalNumericState，将S/M/f与其来源参数绑定。
+K/M仅构建一次；Q、q、环境温度变化分别更新对应载荷，h变化更新H和环境载荷，g变化不重建未消元矩阵。
+所有类别都从当前完整贡献形成，不使用长期差量累加；不缓存每个条件的全局向量。
+矩阵版本和实际dt不变时，CLI复用求解器setup。库调用者仍负责选择正确的setup时机。
+
+~~~cpp
+auto plan = emberfield::problem::buildThermalEvolutionPlan(prepared);
+emberfield::problem::ThermalEvolutionContext context(plan);
+emberfield::problem::ThermalTimeCursor cursor(plan);
+auto oldState = emberfield::problem::evaluateThermalState(plan, definition.time_->start_);
+while (auto step = cursor.peek()) {
+    auto current = emberfield::problem::evaluateThermalState(plan, step->end_);
+    auto numeric = emberfield::problem::assembleThermalState(context, current);
+    auto system = emberfield::problem::buildThermalStepSystem(numeric, previous, oldState, *step);
+    // 求解、按current.constraints()投影、复核残差、后处理并发布后再接受。
+    oldState = std::move(current);
+    cursor.accept(*step);
+}
+~~~
+
+previous是上一接受时刻的完整温度，包含旧g。系统先计算M*previous/dt，再用当前g对称消元，
+不预先把旧状态覆盖为新边界温度。由此保留一致质量矩阵的M_FC*(g_old-g_new)/dt项。
+动态后处理接收同一个numeric和oldState，避免物理参数与矩阵时刻错配。
+
+旧assembleThermalModel及无快照系统工厂只支持常量场；遇到时间表显式拒绝。
+数值模型复制共享不可变设备资源，旧句柄不被更新篡改；长期保留旧模型会增加显存占用。
+上下文独占可变缓存，同实例串行使用、固定CUDA设备，移出后只能赋值或析构。
+GPU批与稀疏预算仍控制对应数组，不是进程总显存预算；资源不足、溢出和CUDA错误传播给调用者。
+
 ## 分层接口
 
 assembly::buildAssemblyPlan仅接收全局维度和有序局部DOF模板，不依赖Mesh、Case或JSON。

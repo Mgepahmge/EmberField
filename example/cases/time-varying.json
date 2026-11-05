@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "name": "plate-time-varying",
+  "description": "Fixed plate with ramped temperature, switched source, flux and convection tables; SI units.",
+  "mesh": {"path": "plate.msh", "coordinateScale": 0.001},
+  "analysis": {
+    "type": "transient", "space": "planar2d", "thickness": 0.01,
+    "domain": {"kind": "physicalGroup", "dimension": 2, "tag": 11}
+  },
+  "materials": [{
+    "id": "solid", "conductivity": {"kind": "constant", "value": 15},
+    "volumetricHeatCapacity": {"kind": "constant", "value": 3900000}
+  }],
+  "materialAssignments": [{"id": "body", "region": {"kind": "physicalGroup", "dimension": 2, "tag": 11}, "material": "solid"}],
+  "sources": [{
+    "id": "heater", "region": {"kind": "physicalGroup", "dimension": 2, "tag": 11}, "kind": "volumetric",
+    "value": {"kind": "timeTable", "interpolation": "previous", "points": [
+      {"time": 0, "value": 0}, {"time": 0.75, "value": 100000}, {"time": 2.25, "value": 0}, {"time": 3, "value": 0}
+    ]}
+  }],
+  "boundaries": [
+    {"id": "left", "region": {"kind": "physicalGroup", "dimension": 1, "tag": 24}, "kind": "temperature",
+      "temperature": {"kind": "timeTable", "interpolation": "linear", "points": [{"time": 0, "value": 300}, {"time": 3, "value": 303}]}},
+    {"id": "right", "region": {"kind": "physicalGroup", "dimension": 1, "tag": 22}, "kind": "convection",
+      "coefficient": {"kind": "timeTable", "interpolation": "previous", "points": [{"time": 0, "value": 10}, {"time": 1.25, "value": 20}, {"time": 3, "value": 20}]},
+      "ambientTemperature": {"kind": "timeTable", "interpolation": "linear", "points": [{"time": 0, "value": 300}, {"time": 3, "value": 295}]}},
+    {"id": "top", "region": {"kind": "physicalGroup", "dimension": 1, "tag": 23}, "kind": "outwardFlux",
+      "flux": {"kind": "timeTable", "interpolation": "linear", "points": [{"time": 0, "value": 0}, {"time": 3, "value": -10}]}}
+  ],
+  "initialState": {"defaultTemperature": {"kind": "constant", "value": 300}},
+  "time": {"start": 0, "end": 3, "step": 0.5, "maxSteps": 100},
+  "linearSolver": {"method": "cg", "relativeTolerance": 1e-10, "absoluteTolerance": 1e-10, "initialGuess": "previousStep"},
+  "output": {"directory": "results-time-varying", "encoding": "ascii", "fields": ["temperature", "temperatureGradient", "heatFlux"],
+    "energy": {"enabled": true}, "includeInitial": true, "includeFinal": true}
+}

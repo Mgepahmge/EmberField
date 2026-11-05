@@ -28,7 +28,31 @@
 | linearSolver | method默认bicgstab，也接受cg；预条件子仅identity；relativeTolerance默认1e-8，absoluteTolerance默认1e-12，maxIterations默认1000；initialGuess默认zero，瞬态可用previousStep |
 | output | format为vtu；默认temperature，可选梯度/热流、编码、监测、热量与资源预算，详见[结果输出](results.md)；CLI输出路径覆盖directory；overwrite默认false；瞬态schedule默认每步，includeInitial/includeFinal默认true |
 
-显式整数选项不接受`1.0`或`1e0`；布尔不接受0/1。标量字段统一写为`{"kind":"constant","value":300}`。这是数值模型的独立联合类型入口，尚不支持张量、时间表、温度依赖和表达式，不能忽略这些输入。
+显式整数选项不接受`1.0`或`1e0`；布尔不接受0/1。常量字段写为`{"kind":"constant","value":300}`。瞬态体源与边界还可使用下述时间表；材料和初态保持常量。尚不支持张量、温度依赖和空间表达式。
+
+### 时间表
+
+~~~json
+{"kind":"timeTable","interpolation":"linear","outside":"error",
+ "points":[{"time":0,"value":300},{"time":2,"value":320}]}
+~~~
+
+| 字段 | 类型、默认值与约束 |
+| --- | --- |
+| kind | 必填字符串timeTable，与constant互斥 |
+| interpolation | 必填linear或previous；线性至少2点，previous至少1点 |
+| outside | error（默认）拒绝外推；hold延续首末值 |
+| points | 必填有序非空数组，不自动排序、不合并节点 |
+| points[].time | 有限绝对物理时间，单位s；转换成double后必须严格递增 |
+| points[].value | 有限物理值，单位由父字段决定 |
+
+允许的父字段为sources[].value、temperature边界的temperature、outwardFlux边界的flux、convection边界的coefficient和ambientTemperature。稳态、材料物性、初始温度禁止时间表。温度和环境温度全表非负，换热系数全表非负，体源与外向通量允许负值。error表必须覆盖time.start至time.end；hold允许单侧或全部运行区间处于表外，仍检查全部节点物理范围。线性插值与保持不会越过节点值范围。
+
+linear在相邻节点之间插值；previous在区间[t_i,t_{i+1})取v_i，精确落在节点t_i时取新值v_i。time是绝对时间，不减去time.start。所有区间内表节点自动插入名义网格start+k*step，不改变后续名义节点；重复时刻合并，不生成零时间步。maxSteps限制插入事件后的实际步数，运行前预检；输出everySteps按实际步号计数。
+
+全部外载荷与规定温度采用后向Euler的步末右连续值，包括跳变节点。事件对齐不等于精确积分脉冲：例如Q在t=1跳变，新值也用于终点为1的这一步，有限步长下会存在时间离散误差。需要更高时间精度时缩小step。h和环境温度分别插值，再计算h*T∞，不对端点乘积直接插值；乘积溢出时终止并记录失败尝试。
+
+共享温度DOF上的多条约束须在整个闭区间相容，而非仅初态相同；比较联合分段节点和真实左极限。相容性采用精确数值比较，不使用近似容差合并边界。初态仍须满足g(time.start)。完整可运行示例见example/cases/time-varying.json。
 
 材料热容量采用density与specificHeat同时提供，或者volumetricHeatCapacity单独提供；三项均须严格正，两种方式互斥。稳态允许缺省全部热容量，瞬态所有材料必须具备热容量。密度与比热乘积不得溢出。
 
@@ -50,7 +74,7 @@
 
 外边界由活动单元侧判断，不能把所有低维物理组当外边界。独立`buildFacetTopology`支持完整一阶Triangle3/Quad4/Tet4/Hex8/Prism6/Pyramid5，按完整节点身份匹配，不按坐标合并。高阶/自定义布局留下阻断项，不静默降阶。低维单元必须与活动外侧匹配；内部/孤立侧拒绝，非流形域拒绝。
 
-自然边界同侧叠加默认拒绝，显式add允许多个自然条件相加；同侧温度与自然条件永远不允许混用。完全相同的常温约束可共用同侧，不同常温冲突。不同侧的角点交汇不提前误判；共享DOF温度/初温相容性留给未来离散空间检查。未覆盖外侧默认绝热，拓扑完整时报告覆盖摘要。
+自然边界同侧叠加默认拒绝，显式add允许多个自然条件相加；同侧温度与自然条件永远不允许混用。全区间相容的温度约束可共用同侧；不同侧交汇时，在条件准备阶段核对共享DOF的温度曲线与起点初温。未覆盖外侧默认绝热，拓扑完整时报告覆盖摘要。
 
 首期无法证明多分区/幽灵文件全域完整性，保守拒绝；partitionCount为0/1且没有幽灵与非1分区成员时可绑定，仍需后续系统检查。Mesh周期元数据不自动施加温度周期条件。
 
