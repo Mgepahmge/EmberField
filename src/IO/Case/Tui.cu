@@ -324,51 +324,71 @@ namespace emberfield::cli {
                 return hbox(
                     {text(label) | color(muted) | size(WIDTH, EQUAL, 13), text(value.empty() ? "-" : value) | flex});
             };
+            const bool wide = caps.columns_ >= 85;
+            const bool detailed = caps.rows_ >= 32;
             Elements title;
-            if (caps.rows_ >= 34 && caps.columns_ >= 85) {
-                title = {text("  ███████╗███╗   ███╗██████╗ ███████╗██████╗ ███████╗██╗███████╗██╗     ██████╗ "),
-                         text("  ██╔════╝████╗ ████║██╔══██╗██╔════╝██╔══██╗██╔════╝██║██╔════╝██║     ██╔══██╗"),
-                         text("  █████╗  ██╔████╔██║██████╔╝█████╗  ██████╔╝█████╗  ██║█████╗  ██║     ██║  ██║"),
-                         text("  ██╔══╝  ██║╚██╔╝██║██╔══██╗██╔══╝  ██╔══██╗██╔══╝  ██║██╔══╝  ██║     ██║  ██║"),
-                         text("  ███████╗██║ ╚═╝ ██║██████╔╝███████╗██║  ██║██║     ██║███████╗███████╗██████╔╝")};
+            if (wide && caps.rows_ >= 24) {
+                title = {text("███████╗███╗   ███╗██████╗ ███████╗██████╗ ███████╗██╗███████╗██╗     ██████╗ "),
+                         text("██╔════╝████╗ ████║██╔══██╗██╔════╝██╔══██╗██╔════╝██║██╔════╝██║     ██╔══██╗"),
+                         text("█████╗  ██╔████╔██║██████╔╝█████╗  ██████╔╝█████╗  ██║█████╗  ██║     ██║  ██║"),
+                         text("██╔══╝  ██║╚██╔╝██║██╔══██╗██╔══╝  ██╔══██╗██╔══╝  ██║██╔══╝  ██║     ██║  ██║"),
+                         text("███████╗██║ ╚═╝ ██║██████╔╝███████╗██║  ██║██║     ██║███████╗███████╗██████╔╝"),
+                         text("╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚══════╝╚═════╝ ")};
             }
             else {
-                title = {text(caps.columns_ < 60 ? "EMBERFIELD / Heat solver"
-                                                 : "EMBERFIELD / CUDA finite-element heat solver") |
-                         bold};
+                title = {text("EmberField") | bold};
             }
-            auto environment = window(text(" ENVIRONMENT ") | color(orange),
+            auto heading = vbox({vbox(title) | color(orange) | hcenter,
+                                 text("GPU-Accelerated Thermal FEM Solver") | color(muted) | hcenter});
+            if (caps.rows_ >= 32) {
+                heading = vbox({heading, text("")});
+            }
+            const char* spinnerFrames[] = {"◐", "◓", "◑", "◒"};
+            auto indicator = s.finished_ ? text(s.code_ == 0         ? "✓"
+                                                    : s.code_ == 130 ? "●"
+                                                                     : "✗") |
+                    color(s.code_ == 0         ? Color::Green
+                              : s.code_ == 130 ? orange
+                                               : Color::Red)
+                                         : text(spinnerFrames[static_cast<int>(seconds * 10) % 4]) | color(orange);
+            const auto status =
+                hbox({text("Status") | color(muted) | size(WIDTH, EQUAL, 13), indicator,
+                      text(" " + (cancelling && !s.finished_ ? "Cancelling safely" : stageName(s.stage_))) | bold});
+            auto environment = window(text(" ENVIRONMENT ") | color(sand) | bold,
                                       vbox({row("GPU", e.gpu_), row("CUDA runtime", e.runtime_),
                                             row("Driver API", e.driverApi_), row("Memory*", e.memory_)}));
-            auto details = window(
-                text(" CASE ") | color(orange),
-                vbox(
-                    {row("Name", s.name_.empty() ? input : s.name_), row("Analysis", s.analysis_), row("Mesh", s.mesh_),
-                     row("Size",
-                         s.total_ ? std::to_string(s.nodes_) + " nodes / " + std::to_string(s.cells_) + " cells" : "-"),
-                     row("System",
-                         s.total_ ? std::to_string(s.dofs_) + " DOF / " + std::to_string(s.nonZeros_) + " nnz" : "-"),
-                     row("Solver", s.solver_)}));
-            auto panels = caps.columns_ >= 85
-                ? hbox({environment | size(WIDTH, EQUAL, std::min(caps.columns_, 112) / 2 - 1), details | flex})
-                : vbox({details});
-            if (caps.rows_ < 28) {
-                panels = row("Case", s.name_.empty() ? input : s.name_);
+            Elements caseRows;
+            if ((wide && caps.rows_ >= 24) || detailed) {
+                caseRows = {
+                    row("Case", s.name_.empty() ? input : s.name_), row("Analysis", s.analysis_),
+                    row("Mesh",
+                        s.total_ ? std::to_string(s.nodes_) + " nodes / " + std::to_string(s.cells_) + " cells" : "-"),
+                    row("System",
+                        s.total_ ? std::to_string(s.dofs_) + " DOF / " + std::to_string(s.nonZeros_) + " nnz" : "-"),
+                    row("Solver", s.solver_)};
+                if (detailed) {
+                    caseRows.push_back(row("Mesh file", s.mesh_));
+                }
+                caseRows.push_back(separator());
             }
-            const char* spinner[] = {"◐", "◓", "◑", "◒"};
-            Elements progress = {
-                hbox({text(s.finished_ ? "● " : spinner[static_cast<int>(seconds * 10) % 4]) | color(orange),
-                      text(" " + stageName(s.stage_)) | bold, filler(),
-                      text(number(s.finished_ ? s.elapsedS_ : seconds) + " s")})};
-            if (cancelling && !s.finished_) {
-                progress.push_back(text("Cancellation requested; waiting for a safe boundary") | color(orange));
+            else {
+                caseRows = {row("Case", s.name_.empty() ? input : s.name_)};
             }
+            caseRows.push_back(status);
+            auto details = window(text(" CASE ") | color(sand) | bold, vbox(caseRows));
+            auto panels = wide
+                ? hbox({environment | size(WIDTH, EQUAL, std::min(caps.columns_, 112) / 2), details | flex})
+                : details;
+            Elements progress;
             if (s.total_) {
                 progress.push_back(
-                    row("Run", std::to_string(s.committed_) + " / " + std::to_string(s.total_) + " committed steps"));
+                    row("Time steps", std::to_string(s.committed_) + " / " + std::to_string(s.total_) + " committed"));
                 progress.push_back(gauge(float(double(s.committed_) / s.total_)) | color(sand));
             }
-            if (s.time_) {
+            if (detailed && cancelling && !s.finished_) {
+                progress.push_back(text("Cancellation requested; waiting for a safe boundary") | color(orange));
+            }
+            if (detailed && s.time_) {
                 progress.push_back(row("Time", number(*s.time_) + " s / dt=" + (s.dt_ ? number(*s.dt_) : "-") + " s"));
             }
             if (s.stage_ == problem::RunStage::Assembling && s.progress_) {
@@ -383,38 +403,50 @@ namespace emberfield::cli {
                 }
             }
             const auto& c = s.convergence_;
-            progress.push_back(row("Iteration", std::to_string(c.iteration()) + " / residual-based progress"));
-            progress.push_back(row("Residual",
-                                   c.residual() ? number(*c.residual()) +
-                                           (c.residualKind() == ResidualKind::True ? " (true)" : " (recursive)")
-                                                : "waiting for first iteration"));
-            progress.push_back(row("Tolerance", c.tolerance() ? number(*c.tolerance()) : "-"));
-            if (c.fraction()) {
+            if (detailed) {
+                progress.push_back(row("Iteration", std::to_string(c.iteration()) + " / residual-based progress"));
+                progress.push_back(row("Residual",
+                                       c.residual() ? number(*c.residual()) +
+                                               (c.residualKind() == ResidualKind::True ? " (true)" : " (recursive)")
+                                                    : "waiting for first iteration"));
+                progress.push_back(row("Tolerance", c.tolerance() ? number(*c.tolerance()) : "-"));
+            }
+            else if (s.stage_ != problem::RunStage::Assembling || !s.progress_) {
+                progress.push_back(row("Iter " + std::to_string(c.iteration()),
+                                       c.residual() ? number(*c.residual()) + " / tol " +
+                                               (c.tolerance() ? number(*c.tolerance()) : "-")
+                                                    : "waiting for first iteration"));
+            }
+            if (c.fraction() && (detailed || s.stage_ != problem::RunStage::Assembling || !s.progress_)) {
                 progress.push_back(
                     hbox({gauge(float(*c.fraction())) | flex | color(c.accepted() ? Color::Green : orange),
                           text(" " + std::to_string(static_cast<int>(*c.fraction() * 100)) + "%" +
                                (c.accepted() ? " accepted" : ""))}));
             }
-            if (s.acceptedResidual_ && caps.rows_ >= 28) {
+            if (s.acceptedResidual_ && detailed) {
                 progress.push_back(row("Accepted |r|", number(*s.acceptedResidual_)));
             }
             Elements logs;
-            const auto lines = caps.rows_ >= 34 ? 4u : 1u;
+            const auto lines = caps.rows_ >= 36 ? 4u : 0u;
             for (auto it = s.messages_.end() - std::min<std::size_t>(lines, s.messages_.size());
                  it != s.messages_.end(); ++it) {
                 logs.push_back(text(*it) | color(muted));
             }
-            Elements body = {vbox(title) | color(orange),
-                             panels,
-                             window(text(" PROGRESS ") | color(orange), vbox(progress)),
-                             vbox(logs) | flex,
-                             row("Results", output),
-                             text(s.finished_ ? "Enter / Q / Esc  close" : "Q / Esc / Ctrl-C  cancel safely") |
-                                 color(sand)};
-            if (caps.rows_ >= 34) {
+            Elements body = {
+                heading,
+                panels,
+                window(text(" PROGRESS ") | color(sand) | bold, vbox(progress)),
+                vbox(logs) | flex,
+                row("Results", output),
+                hbox({(caps.columns_ >= 60 ? text("Elapsed " + number(s.finished_ ? s.elapsedS_ : seconds) + " s")
+                                           : text("")) |
+                          color(muted),
+                      filler(),
+                      text(s.finished_ ? "Enter / Q / Esc  close" : "Q / Esc / Ctrl-C  cancel safely") | color(sand)})};
+            if (caps.rows_ >= 36) {
                 body.push_back(text("* Device-wide memory at startup; includes other processes") | color(muted));
             }
-            return vbox(body) | size(WIDTH, LESS_THAN, 112) | center | color(sand);
+            return vbox(body) | size(WIDTH, EQUAL, std::min(caps.columns_, 112)) | hcenter | color(sand);
         }
     } // namespace
 #endif
