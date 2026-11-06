@@ -84,14 +84,14 @@ def main():
         shutil.copy2(args.executable, binary)
         help_text = run([binary, "--help"], root).stdout
         assert "--resource-limits" in help_text and "--max-values" not in help_text
-        assert "E M B E R F I E L D" not in help_text
+        assert "GPU-Accelerated Thermal FEM Solver" not in help_text
         version_text = run([binary, "--version"], root).stdout
         assert "EmberField 0.1.0" in version_text and "GPU" not in version_text
         run([binary], root, expected=None)
         case = root / "plate.multi.json"
         case.write_text(json.dumps(source), encoding="utf-8")
         steady_run = run([binary, case], root)
-        assert "E M B E R F I E L D" in steady_run.stdout
+        assert "GPU-Accelerated Thermal FEM Solver" in steady_run.stdout
         assert "GPU" in steady_run.stdout and "CUDA" in steady_run.stdout
         assert "[准备]" in steady_run.stdout and "[算例]" in steady_run.stdout
         assert "[进度]" in steady_run.stdout and "[完成]" in steady_run.stdout
