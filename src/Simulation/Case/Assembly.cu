@@ -61,6 +61,10 @@ namespace emberfield::problem {
         return detail::ThermalAssemblyAccess::plan(std::move(p), std::move(graph), o);
     }
     AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan) {
+        return assembleThermalModel(std::move(plan), nullptr);
+    }
+    AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan,
+                                               ProgressObserver* observer) {
         EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::assembleThermalModel", emberfield::NvtxColor::Yellow);
         if (!plan) {
             throw std::invalid_argument("热组装计划为空");
@@ -78,6 +82,9 @@ namespace emberfield::problem {
         if (p.bound()->data().definition_.analysis_.type_ == AnalysisType::Transient) {
             mass.emplace(plan->plan());
         }
+        if (observer) {
+            observer->onProgress({ProgressWork::Cells, 0, count, true});
+        }
         for (std::size_t first = 0; first < count;) {
             EMBERFIELD_NVTX_SCOPE("emberfield::problem::assembleThermalModel/cellBatch");
             const auto n = std::min(cellBatch, count - first);
@@ -90,11 +97,17 @@ namespace emberfield::problem {
                 mass->addMatrix(first, n, batch.capacity()->values());
             }
             first += n;
+            if (observer) {
+                observer->onProgress({ProgressWork::Cells, first, count, true});
+            }
         }
         const auto& terms = p.conditions()->naturalTerms();
         const auto& definitions = p.bound()->data().definition_.boundaries_;
         const auto sideBatch = std::min({o.batchElements_, o.gpuLimits_.maxElements_,
                                          o.gpuLimits_.maxScalars_ / (p.space()->dimension() == 2 ? 4u : 9u)});
+        if (observer) {
+            observer->onProgress({ProgressWork::Boundaries, 0, terms.size(), true});
+        }
         for (std::size_t first = 0; first < terms.size();) {
             EMBERFIELD_NVTX_SCOPE("emberfield::problem::assembleThermalModel/boundaryBatch");
             const auto type = definitions[terms[first].definitionIndex()].value_.index();
@@ -115,6 +128,12 @@ namespace emberfield::problem {
                 spatial.addVector(count + first, n, c.load().values());
             }
             first += n;
+            if (observer) {
+                observer->onProgress({ProgressWork::Boundaries, first, terms.size(), true});
+            }
+        }
+        if (observer) {
+            observer->onProgress({ProgressWork::Boundaries, 0, 0, false});
         }
         std::optional<assembly::Matrix> capacity;
         if (mass) {

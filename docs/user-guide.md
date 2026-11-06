@@ -16,7 +16,7 @@
 ## 命令行
 
 ~~~text
-emberfield <case.json> [--output-root PATH] [--output NAME] [--resource-limits PATH]
+emberfield <case.json> [--output-root PATH] [--output NAME] [--resource-limits PATH] [--ui auto|tui|plain] [--no-wait]
 emberfield --help
 emberfield --version
 ~~~
@@ -27,11 +27,35 @@ emberfield --version
 | --output-root PATH | 否 | 结果根目录，默认是实际可执行文件所在目录；显式相对路径相对于启动工作目录解析。 |
 | --output NAME | 否 | 根目录下的单级文件夹名，默认是算例文件去掉最后扩展名后的名字。例如 plate.v2.json 对应 plate.v2。不得包含路径分隔符或系统保留名称。 |
 | --resource-limits PATH | 否 | 单独的资源预算 JSON 文件；相对路径相对于启动工作目录解析。程序不自动加载项目的 limits.json。 |
+| --ui auto/tui/plain | 否 | 默认auto；输入、输出均为TTY且TERM非dumb，窗口至少40列18行时使用TUI，否则普通输出。显式tui不可用时计算前报错。 |
+| --no-wait | 否 | TUI完成后自动退出；默认完成后留屏，Enter/Q/Esc关闭。普通输出不等待。 |
 | --help / --version | 否 | 显示帮助或程序版本；不要求初始化 CUDA。 |
 
 最终目录始终由 --output-root 与 --output 组合，覆盖算例内的 output.directory；其他输出选项仍由算例决定。如果想复用同一算例，给每次运行不同的 --output 名称，或者在算例中显式设置 output.overwrite。资源文件只改变预算，不改变材料、时间步或求解容差。
 
 退出码：0 成功；2 输入、绑定或离散准备失败；3 线性求解或接受残差失败；1 资源、运行或输出错误；130 在安全步边界响应中断。参数语法错误沿用 CLI11 的退出码。程序同时在结果目录保留结构化运行记录；不要解析终端进度文本作为机器协议。
+
+## 终端进度与取消
+
+TUI沿用暖色标题、设备与算例信息面板。宽终端显示双面板；较矮窗口省略大标题与详细信息。
+窗口缩到40列18行以下时恢复终端并继续普通输出，不重新计算。`-DEMBERFIELD_BUILD_TUI=OFF`
+可构建普通CLI；FTXUI仅为CLI私有依赖，不影响下游库用户。
+
+| 阶段 | 展示方式 |
+| --- | --- |
+| 读取、准备、符号图、建系统、预条件准备、验收、后处理、写出、终结 | 旋转指示器，不估计剩余时间 |
+| 数值组装体/自然项及实际重算的时变类别 | 当前外层批循环已完成实体/总实体；不同工作段独立计数，合并时恢复旋转指示器 |
+| 线性求解 | 使用首个已完成迭代的残差r0及当前残差r，p=clamp(1-(r-tol)/(r0-tol),0,1)；允许回退，不按迭代上限估算 |
+| 总运行 | 成功发布且游标接受的实际时间步/预演总步数；时间表节点插入计入总数，初态不计一步 |
+
+tol=max(atol,rtol*||b||2)。首轮之前显示等待，初值或首轮达标直接显示100%；非有限值时无百分比。
+残差注明递推/真实来源；100%不代表输出成功，绿色accepted仅在规定温度投影及真实残差验收通过后出现。
+Driver API是CUDA驱动API版本，不是NVIDIA驱动软件包号；Memory*为启动时设备整体已用/总显存，含其他进程，不是本进程峰值。
+
+运行中Q/Esc/Ctrl-C或SIGINT/SIGTERM请求取消。在既有GPU调用及完整迭代求解结束后的安全边界检查，
+随后整理摘要并等待计算线程退出，返回130。终端断开同样请求取消；不强行终止CUDA，不提供暂停/重启。
+自动模式输出重定向时不输出ANSI控制序列，适合批处理；机器读取应使用结果目录的结构化文件。
+当前终端实现及PTY验收范围是Linux远程服务器，不声称已经验证原生Windows控制台。
 
 ## 算例配置
 

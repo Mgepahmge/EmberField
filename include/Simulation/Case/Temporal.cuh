@@ -107,6 +107,10 @@ namespace emberfield::problem {
         /** @brief 创建固定资源。@param plan 来源计划。@pre 当前设备可用。
          * @note 无返回值，资源/参数异常传播。@code ThermalEvolutionContext c(plan); @endcode */
         explicit ThermalEvolutionContext(std::shared_ptr<const ThermalEvolutionPlan> plan);
+        /** @brief 创建可观察固定资源。@param plan 来源计划。@param observer 借用批观察者。
+         * @pre 同原构造，观察者存活覆盖上下文。@note 无返回值，异常同原构造。
+         * @code ThermalEvolutionContext c(plan,&observer); @endcode */
+        ThermalEvolutionContext(std::shared_ptr<const ThermalEvolutionPlan> plan, ProgressObserver* observer);
         ~ThermalEvolutionContext(); ///< RAII释放资源。
         ThermalEvolutionContext(ThermalEvolutionContext&&) noexcept; ///< 移动所有权。
         ThermalEvolutionContext& operator=(ThermalEvolutionContext&&) noexcept; ///< 移动所有权。

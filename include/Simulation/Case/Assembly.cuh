@@ -4,6 +4,7 @@
 #pragma once
 #include <FEM/Assembly/Operations.cuh>
 #include <Simulation/Case/GpuPreparation.cuh>
+#include <Simulation/Case/Progress.cuh>
 #include <stdexcept>
 /** @brief 物理算例的组装适配，不承担通用稀疏运算。 */
 namespace emberfield::problem {
@@ -91,4 +92,9 @@ namespace emberfield::problem {
      * @throws std::invalid_argument 空计划；积分、数值和CUDA异常传播。
      * @code auto model=assembleThermalModel(plan); @endcode */
     [[nodiscard]] AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan);
+    /** @brief 带批观察的数值组装。@param plan 符号计划。@param observer 可空借用观察者。
+     * @pre 同原重载，观察者存活覆盖调用。@return 完整热模型，数值流程不变。
+     * @code auto m=assembleThermalModel(plan,&observer); @endcode */
+    [[nodiscard]] AssembledThermalModel assembleThermalModel(std::shared_ptr<const ThermalAssemblyPlan> plan,
+                                                             ProgressObserver* observer);
 } // namespace emberfield::problem

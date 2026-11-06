@@ -9,6 +9,7 @@
 #include <NVTXProfiler.cuh>
 #include <Simulation/Case/Run.cuh>
 #include <version.cuh>
+#include "IO/Case/Tui.cuh"
 
 #include <csignal>
 #include <cuda_runtime_api.h>
@@ -46,7 +47,7 @@ namespace {
         }
         int runtime = 0, driver = 0;
         if (cudaRuntimeGetVersion(&runtime) == cudaSuccess && cudaDriverGetVersion(&driver) == cudaSuccess) {
-            std::cout << "  CUDA         runtime " << cudaVersion(runtime) << " / driver " << cudaVersion(driver)
+            std::cout << "  CUDA         runtime " << cudaVersion(runtime) << " / Driver API " << cudaVersion(driver)
                       << '\n';
         }
     }
@@ -112,7 +113,10 @@ namespace {
 int main(int argc, char** argv) {
     EMBERFIELD_NVTX_SCOPE_COLOR("main", emberfield::NvtxColor::Rose);
     CLI::App app{"EmberField 热传导有限元求解器"};
-    std::string input, root, name, resourceLimits;
+    std::string input, root, name, resourceLimits, ui = "auto";
+    bool noWait = false;
+    app.add_option("--ui", ui, "界面模式 auto/tui/plain")->check(CLI::IsMember({"auto", "tui", "plain"}));
+    app.add_flag("--no-wait", noWait, "TUI完成后立即退出");
     app.add_option("input", input, "算例配置文件路径")->required()->check(CLI::ExistingFile);
     app.add_option("--output-root", root, "结果目录的保存位置，默认可执行文件目录");
     auto* output = app.add_option("--output", name, "结果目录名，默认算例配置文件名（去扩展名）");
@@ -132,6 +136,10 @@ int main(int argc, char** argv) {
         const auto directory = emberfield::io::outputDirectory(
             input, root.empty() ? emberfield::io::executableDirectory() : std::filesystem::path(root),
             output->count() ? std::optional<std::string>(name) : std::nullopt);
+        const auto mode = emberfield::cli::selectUiMode(ui, emberfield::cli::terminalCapabilities());
+        if (mode == emberfield::cli::UiMode::Tui) {
+            return emberfield::cli::runTui(input, directory, limits, noWait);
+        }
         printBanner(version, input, directory, resourceLimits);
         SignalGuard guard;
         return emberfield::problem::runCase(input, directory, &interrupted, limits);

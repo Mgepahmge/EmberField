@@ -23,11 +23,19 @@ if(Python3_Interpreter_FOUND)
         add_test(NAME case-conversion-integration COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/IO/Case/test_conversion.py" --executable "$<TARGET_FILE:emberfield_cli>")
     endif()
+    if(EMBERFIELD_BUILD_TUI AND UNIX)
+        add_test(NAME cli-tui-contract COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/IO/Case/test_tui.py" "$<TARGET_FILE:emberfield_cli>"
+            "${PROJECT_SOURCE_DIR}/example/cases")
+        set_tests_properties(cli-tui-contract PROPERTIES TIMEOUT 120)
+    endif()
     add_test(NAME cli-result-contract COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/IO/Result/validate_cli.py"
         "$<TARGET_FILE:emberfield_cli>" "${PROJECT_SOURCE_DIR}/example/cases")
 endif()
 target_include_directories(emberfield_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources(emberfield_tests PRIVATE FEM/Element/reference_element_test.cpp FEM/Space/finite_element_space_test.cpp Simulation/Case/temperature_space_test.cpp FEM/Element/geometry_integration_test.cpp Simulation/Thermal/thermal_element_test.cpp Simulation/Case/condition_preparation_test.cpp Simulation/Thermal/gpu_thermal_test.cpp Simulation/Case/gpu_preparation_test.cpp)
+target_sources(emberfield_tests PRIVATE IO/Case/tui_progress_test.cpp)
+target_compile_definitions(emberfield_tests PRIVATE EMBERFIELD_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 include(GoogleTest)
 target_sources(emberfield_tests PRIVATE FEM/Assembly/assembly_test.cpp Numerics/LinearSystem/system_test.cpp Simulation/Case/thermal_assembly_test.cpp)
 gtest_discover_tests(emberfield_tests NO_PRETTY_VALUES)

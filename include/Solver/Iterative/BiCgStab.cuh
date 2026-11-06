@@ -139,6 +139,7 @@ namespace emberfield {
             else if (status == SolveStatus::Converged) {
                 status = SolveStatus::MaxIterations;
             }
+            this->notifyIteration({iterations, residual, tolerance, IterationKind::Final, ResidualKind::True, status});
             return {status, iterations, residual, normB > 0 ? residual / normB : residual};
         }
         /** @brief 在已分配工作向量上执行递推，无参数。@pre 状态完整。
@@ -156,6 +157,7 @@ namespace emberfield {
             const T tolerance = std::max(options_.absoluteTolerance_, options_.relativeTolerance_ * normB);
             operations.residual(s.rhs_, s.x_, s.r_);
             T residual = operations.norm(s.r_);
+            this->notifyIteration({0, residual, tolerance, IterationKind::Initial, ResidualKind::True, {}});
             if (!std::isfinite(normB) || !std::isfinite(residual)) {
                 return finish(SolveStatus::NonFinite, 0, normB, tolerance);
             }
@@ -212,6 +214,8 @@ namespace emberfield {
                     EMBERFIELD_NVTX_SCOPE("emberfield::BiCgStab::earlyResidualCheck");
                     operations.residual(s.rhs_, s.x_, s.r_);
                     residual = operations.norm(s.r_);
+                    this->notifyIteration(
+                        {iterations, residual, tolerance, IterationKind::Iteration, ResidualKind::True, {}});
                     if (residual <= tolerance || !std::isfinite(residual)) {
                         return finish(SolveStatus::MaxIterations, iterations, normB, tolerance);
                     }
@@ -242,15 +246,22 @@ namespace emberfield {
                 if (!std::isfinite(residual)) {
                     return finish(SolveStatus::NonFinite, iterations, normB, tolerance);
                 }
-                if (residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0) {
+                const bool refreshed = residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0;
+                if (refreshed) {
                     EMBERFIELD_NVTX_SCOPE("emberfield::BiCgStab::residualRefresh");
                     operations.residual(s.rhs_, s.x_, s.r_);
                     residual = operations.norm(s.r_);
+                    this->notifyIteration(
+                        {iterations, residual, tolerance, IterationKind::Iteration, ResidualKind::True, {}});
                     if (residual <= tolerance || !std::isfinite(residual)) {
                         return finish(SolveStatus::MaxIterations, iterations, normB, tolerance);
                     }
                     s.shadow_.copyDataFrom(s.r_);
                     fresh = true;
+                }
+                if (!refreshed) {
+                    this->notifyIteration(
+                        {iterations, residual, tolerance, IterationKind::Iteration, ResidualKind::Recursive, {}});
                 }
                 rhoPrevious = rho;
             }

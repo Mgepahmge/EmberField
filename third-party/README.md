@@ -27,3 +27,12 @@ CLI11来源为`/home/mingyu/CLionProjects/T-BLAEQ/src/CLI11.hpp`和`THIRD_PARTY_
 CLI11仅作为主程序私有头文件依赖，不暴露于库的公共接口。安装保留原件（share/EmberField/third-party/CLI11）及许可证（share/licenses/EmberField/CLI11），不需要网络下载或单独安装。
 
 NVTXProfiler适配版本位于include/NVTXProfiler.cuh，保留原版权与Apache-2.0标识。相对原件增加编译开关与快捷宏，默认关闭调用编号，编号改为线程局部；栈范围禁止复制移动，颜色按标准ARGB定义。原实现头文件SHA256为8f2edaa7236ef9e542446a7b950baedde909d9524ec2984c5bed3d5870fe27e1；原LICENSE的SHA256为ebde68e358a77e10df42a65e1a0c61f7ea1042f2447b9d4d75a168fd78a467b4。安装时将许可证与NOTICE保存至share/licenses/EmberField/NVTXProfiler。NVTX本身使用CUDA Toolkit提供的NVTX3头文件，不额外下载或捆绑。
+
+## FTXUI
+
+FTXUI仅作为CLI私有依赖，版本声明6.1.9，MIT License。副本来自项目所有者提供的
+EmberField-TUI-demo.zip内vendor/ftxui，未修改第三方源文件；不把其版本声明视为上游发布核验。
+上游：https://github.com/ArthurSonzogni/FTXUI 。原ZIP SHA256：
+`ef43f201559cba08d180d1b1ade1f34c3b489bf5a10dd67f1d682d3930da6c0a`。
+源分发保留原许可证及文件版权声明，安装保留share/licenses/EmberField/ftxui/LICENSE。
+配置`-DEMBERFIELD_BUILD_TUI=OFF`可构建无FTXUI依赖的普通CLI，库本身始终不依赖FTXUI。

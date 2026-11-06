@@ -210,3 +210,18 @@ auto report = solver.apply(rhs, x);
 不属于安装接口。内部测试在独立测试程序中编译 AMG 实现，与主机基准逐阶段对照。
 公共 AMG 头文件不包含这些实现或循环调度定义；层次状态使用不透明类型和独占所有权。
 构造、析构和移动操作在源文件中定义，提供 float/double 与 32/64 位索引的四种实例。
+
+## 无侵入迭代观察
+
+`IterationObserver<T>`从CG/BiCGStab同步接收Initial、Iteration、Final标量快照，
+包含当前轮号、已有残差、实际停止阈值及递推/真实来源。Final携带SolveStatus，
+不代表额外完成一轮，也不能用失败的首轮Final补造首轮基准。零迭代只有Initial/Final。
+周期刷新与BiCGStab提前分支在已有真实残差计算后通知，每个已完成轮次只通知一次。
+观察不增加范数、SpMV或CUDA同步；回调不可抛异常、重入或修改求解器。
+
+`solver.setObserver(pointer)`返回旧的借用指针；`IterationSubscription<T,I>`在作用域结束恢复旧指针。
+观察者及求解器都必须比订阅守卫活得更久，实例仍不支持并发apply或在apply中替换观察者。
+复制/移动构造不向新对象传播观察指针，赋值保留目标对象自己的订阅。
+
+正式`runCase`保留四参数重载；六参数重载增加RunObserver及RunControl借用指针，
+分别提供阶段/批/迭代事件和原子取消。空观察者仍用普通逐行输出；Finished在数值资源释放后通知。

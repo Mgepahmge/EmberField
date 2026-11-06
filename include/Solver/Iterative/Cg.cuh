@@ -121,6 +121,7 @@ namespace emberfield {
             else if (status == SolveStatus::Converged) {
                 status = SolveStatus::MaxIterations;
             }
+            this->notifyIteration({iterations, residual, tolerance, IterationKind::Final, ResidualKind::True, status});
             return {status, iterations, residual, normB > 0 ? residual / normB : residual};
         }
         /** @brief 在持久工作区上执行 PCG 递推，无参数。
@@ -134,6 +135,7 @@ namespace emberfield {
             const T tolerance = std::max(options_.absoluteTolerance_, options_.relativeTolerance_ * normB);
             op.residual(s.rhs_, s.x_, s.r_);
             T residual = op.norm(s.r_);
+            this->notifyIteration({0, residual, tolerance, IterationKind::Initial, ResidualKind::True, {}});
             if (!std::isfinite(normB) || !std::isfinite(residual)) {
                 return finish(SolveStatus::NonFinite, 0, normB, tolerance);
             }
@@ -183,14 +185,21 @@ namespace emberfield {
                 if (!std::isfinite(residual)) {
                     return finish(SolveStatus::NonFinite, iterations, normB, tolerance);
                 }
-                if (residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0) {
+                const bool refreshed = residual <= tolerance || iterations % options_.residualRefreshInterval_ == 0;
+                if (refreshed) {
                     EMBERFIELD_NVTX_SCOPE("emberfield::Cg::residualRefresh");
                     op.residual(s.rhs_, s.x_, s.r_);
                     residual = op.norm(s.r_);
+                    this->notifyIteration(
+                        {iterations, residual, tolerance, IterationKind::Iteration, ResidualKind::True, {}});
                     if (!std::isfinite(residual) || residual <= tolerance) {
                         return finish(SolveStatus::MaxIterations, iterations, normB, tolerance);
                     }
                     fresh = true;
+                }
+                if (!refreshed) {
+                    this->notifyIteration(
+                        {iterations, residual, tolerance, IterationKind::Iteration, ResidualKind::Recursive, {}});
                 }
                 previousRho = rho;
             }
