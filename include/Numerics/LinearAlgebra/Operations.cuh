@@ -104,6 +104,21 @@ namespace emberfield::linalg {
                 !std::in_range<Out>(matrix.nonZeroCount())) {
                 throw std::length_error("Sparse operation exceeds its structural index range");
             }
+            // 结构每次在设备重新检查；公开数值可写，不以地址缓存可信状态。
+            if constexpr (std::same_as<Out, I> && (std::same_as<I, std::int32_t> || std::same_as<I, std::int64_t>)) {
+                if (matrix.memoryType() != MemoryType::Pinned &&
+                    canonicalPattern(matrix.rowCount(), matrix.rowOffsets().deviceData(),
+                                     matrix.columnIndices().deviceData())) {
+                    auto offsets = deviceCopy(matrix.rowOffsets());
+                    auto columns = deviceCopy(matrix.columnIndices());
+                    auto values = deviceCopy(matrix.values());
+                    if (matrix.rowCount() == 0 && offsets.empty()) {
+                        return CsrMatrix<T, Out>{};
+                    }
+                    return CsrMatrix<T, Out>::fromBuffers(matrix.rowCount(), matrix.columnCount(), std::move(offsets),
+                                                          std::move(columns), std::move(values));
+                }
+            }
             const auto offsets = hostCopy(matrix.rowOffsets());
             const auto columns = hostCopy(matrix.columnIndices());
             const auto values = hostCopy(matrix.values());

@@ -144,6 +144,64 @@ namespace emberfield::thermal {
                 *result = shared[0];
             }
         }
+
+        /** @brief 在设备验证中间值并求Fourier，保持原两阶段表达式。
+         * @param cells 样本。@param values 中间量。@param n 批长。@param flux 是否生成热流。
+         * @param bad 错误标志。@pre 设备数组有效。@return 无。
+         * @code checkCellValues<<<grid,256>>>(cells,values,n,true,bad); @endcode */
+        __global__ void checkCellValues(const P1CellSample* cells, P1CellValue* values, std::size_t n, bool flux,
+                                        int* bad) {
+            auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+            if (i >= n) {
+                return;
+            }
+            auto& v = values[i];
+            if (!isfinite(v.minimum_) || !isfinite(v.maximum_) || !isfinite(v.integral_) || !isfinite(v.energy_)) {
+                atomicExch(bad, 1);
+            }
+            for (int k = 0; k < 3; ++k) {
+                if (!isfinite(v.gradient_[k])) {
+                    atomicExch(bad, 1);
+                }
+                if (flux) {
+                    v.flux_[k] = -cells[i].conductivity_ * v.gradient_[k];
+                    if (!isfinite(v.flux_[k])) {
+                        atomicExch(bad, 1);
+                    }
+                }
+            }
+        }
+
+        /** @brief 直接消费设备单元值和样本体积，保持旧归约树。 */
+        __global__ void regionDeviceKernel(const P1CellValue* values, const P1CellSample* cells, std::size_t n,
+                                           RegionStatistics* result) {
+            __shared__ RegionStatistics shared[256];
+            RegionStatistics s{INFINITY, -INFINITY, 0, 0, 0};
+            for (std::size_t i = threadIdx.x; i < n; i += blockDim.x) {
+                s.minimum_ = fmin(s.minimum_, values[i].minimum_);
+                s.maximum_ = fmax(s.maximum_, values[i].maximum_);
+                s.integral_ += values[i].integral_;
+                s.energy_ += values[i].energy_;
+                s.volume_ += cells[i].volume_;
+            }
+            shared[threadIdx.x] = s;
+            __syncthreads();
+            for (unsigned stride = 128; stride; stride /= 2) {
+                if (threadIdx.x < stride) {
+                    auto& a = shared[threadIdx.x];
+                    const auto& b = shared[threadIdx.x + stride];
+                    a.minimum_ = fmin(a.minimum_, b.minimum_);
+                    a.maximum_ = fmax(a.maximum_, b.maximum_);
+                    a.integral_ += b.integral_;
+                    a.energy_ += b.energy_;
+                    a.volume_ += b.volume_;
+                }
+                __syncthreads();
+            }
+            if (!threadIdx.x) {
+                *result = shared[0];
+            }
+        }
     } // namespace
     std::vector<P1CellValue> evaluateP1Gradient(std::span<const P1CellSample> cells, const Vector<double>& t) {
         EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::thermal::evaluateP1Gradient", emberfield::NvtxColor::Yellow);
@@ -329,4 +387,127 @@ namespace emberfield::thermal {
         }
         return result;
     }
+
+    namespace detail {
+        /** @brief 固定样本和批工作区；设备缓存受构造预算限制。
+         * @code Impl work(samples,capacity,cacheBytes); @endcode */
+        struct P1PostprocessWorkspace::Impl {
+            std::span<const P1CellSample> samples_; ///< 借用不可变CPU样本。
+            std::size_t capacity_; ///< 最大批长度。
+            int device_; ///< 所属设备。
+            CudaBuffer<P1CellSample> resident_; ///< 可选全量静态样本，不足预算时为空。
+            CudaBuffer<P1CellSample> input_; ///< 有界流式输入。
+            CudaBuffer<P1CellValue> values_; ///< 设备中间结果。
+            CudaBuffer<RegionStatistics> statistics_; ///< 单个统计结果。
+            CudaBuffer<int> status_; ///< 每批重置状态。
+            /** @brief 建立有界资源。@param samples 来源。@param capacity 批长。
+             * @param cacheBytes 常驻预算。@pre 当前设备可用。@return 无。
+             * @code Impl work(samples,capacity,cacheBytes); @endcode */
+            Impl(std::span<const P1CellSample> samples, std::size_t capacity, std::size_t cacheBytes) :
+                samples_(samples), capacity_(capacity), input_(capacity), values_(capacity), statistics_(1),
+                status_(1) {
+                auto code = cudaGetDevice(&device_);
+                if (code != cudaSuccess) {
+                    throw CudaError(code, "postprocess workspace");
+                }
+                // 静态输入不满足预算时继续使用批流式，不改变原批长度。
+                if (!samples.empty() && samples.size() <= cacheBytes / sizeof(P1CellSample)) {
+                    resident_ = CudaBuffer<P1CellSample>(samples);
+                }
+            }
+            /** @brief 准备并验证本批，结果留在设备。@param first 起点。@param count 长度。
+             * @param t 温度。@param flux 是否计算热流。@pre 串行调用。
+             * @return 本批设备样本指针。@code auto c=run(first,count,t,false); @endcode */
+            const P1CellSample* run(std::size_t first, std::size_t count, const Vector<double>& t, bool flux) {
+                device(t);
+                if (t.deviceId() != device_ || !count || count > capacity_ || first > samples_.size() ||
+                    count > samples_.size() - first) {
+                    throw std::invalid_argument("P1 workspace batch/device mismatch");
+                }
+                const auto cells = samples_.subspan(first, count);
+                for (const auto& c : cells) {
+                    if ((c.dimension_ != 2 && c.dimension_ != 3) || !(c.volume_ > 0) || !std::isfinite(c.volume_)) {
+                        throw std::invalid_argument("非法P1单元");
+                    }
+                    for (unsigned a = 0; a <= c.dimension_; ++a) {
+                        if (c.dofs_[a] >= t.size()) {
+                            throw std::invalid_argument("P1 DOF越界");
+                        }
+                    }
+                    for (double x : c.gradients_) {
+                        finite(x);
+                    }
+                    if (flux && !(finite(c.conductivity_) > 0)) {
+                        throw std::invalid_argument("导热率必须为正");
+                    }
+                }
+                const P1CellSample* input;
+                if (!resident_.empty()) {
+                    input = resident_.deviceData() + first;
+                }
+                else {
+                    auto code =
+                        cudaMemcpy(input_.deviceData(), cells.data(), cells.size_bytes(), cudaMemcpyHostToDevice);
+                    if (code != cudaSuccess) {
+                        throw CudaError(code, "postprocess streaming upload");
+                    }
+                    input = input_.deviceData();
+                }
+                auto code = cudaMemset(status_.deviceData(), 0, sizeof(int));
+                if (code != cudaSuccess) {
+                    throw CudaError(code, "postprocess reset");
+                }
+                const auto grid = static_cast<unsigned>((count + 255) / 256);
+                gradientKernel<<<grid, 256>>>(input, count, t.deviceData(), values_.deviceData());
+                checkCellValues<<<grid, 256>>>(input, values_.deviceData(), count, flux, status_.deviceData());
+                sync();
+                int bad{};
+                code = cudaMemcpy(&bad, status_.deviceData(), sizeof(int), cudaMemcpyDeviceToHost);
+                if (code != cudaSuccess) {
+                    throw CudaError(code, "postprocess status");
+                }
+                if (bad) {
+                    throw std::overflow_error("后处理结果非有限");
+                }
+                return input;
+            }
+        };
+        P1PostprocessWorkspace::P1PostprocessWorkspace(std::span<const P1CellSample> cells, std::size_t capacity,
+                                                       std::size_t cacheBytes) {
+            if (!capacity) {
+                throw std::invalid_argument("P1 batch capacity must be positive");
+            }
+            impl_ = std::make_unique<Impl>(cells, capacity, cacheBytes);
+        }
+        P1PostprocessWorkspace::~P1PostprocessWorkspace() noexcept = default;
+        std::vector<P1CellValue> P1PostprocessWorkspace::fields(std::size_t first, std::size_t count,
+                                                                const Vector<double>& t) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::thermal::P1PostprocessWorkspace::fields");
+            impl_->run(first, count, t, true);
+            std::vector<P1CellValue> result(count);
+            auto code = cudaMemcpy(result.data(), impl_->values_.deviceData(), count * sizeof(P1CellValue),
+                                   cudaMemcpyDeviceToHost);
+            if (code != cudaSuccess) {
+                throw CudaError(code, "postprocess field download");
+            }
+            return result;
+        }
+        RegionStatistics P1PostprocessWorkspace::region(std::size_t first, std::size_t count, const Vector<double>& t) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::thermal::P1PostprocessWorkspace::region");
+            const auto* input = impl_->run(first, count, t, false);
+            regionDeviceKernel<<<1, 256>>>(impl_->values_.deviceData(), input, count, impl_->statistics_.deviceData());
+            sync();
+            RegionStatistics result;
+            auto code = cudaMemcpy(&result, impl_->statistics_.deviceData(), sizeof(result), cudaMemcpyDeviceToHost);
+            if (code != cudaSuccess) {
+                throw CudaError(code, "postprocess statistics");
+            }
+            finite(result.minimum_);
+            finite(result.maximum_);
+            finite(result.integral_);
+            finite(result.energy_);
+            finite(result.volume_);
+            return result;
+        }
+    } // namespace detail
 } // namespace emberfield::thermal

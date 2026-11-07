@@ -12,6 +12,20 @@ namespace emberfield::linalg {
 
     /** @brief 提供线性代数内部设备管理、库调用与结果传输设施。 */
     namespace detail {
+        /** @brief 在GPU检查行内严格列序，不缓存来源指针或数值状态。
+         * @tparam I 有符号CSR索引。@param rows 行数。@param offsets 合法CSR偏移。
+         * @param columns 合法列数组。@pre 当前设备正确，输入已完成且可设备访问。
+         * @return 有序唯一为true，重复或无序为false；空矩阵为true。
+         * @code auto sorted = canonicalPattern(n, rp, ci); @endcode */
+        template <CsrIndex I>
+        bool canonicalPattern(std::size_t rows, const I* offsets, const I* columns);
+        /** @brief 在GPU检查浮点数组有限性，只下载一个状态。
+         * @tparam T Scalar精度。@param count 元素数。@param values 设备数组。
+         * @pre 当前设备正确且数组已完成。@return 全部有限为true；空数组为true。
+         * @code auto finite = finiteValues(n, values); @endcode */
+        template <Scalar T>
+        bool finiteValues(std::size_t count, const T* values);
+
         /** @brief 临时选择运算设备，并在退出时恢复调用方设备；禁止复制。
          * @code OperationScope scope(vector.deviceId()); @endcode
          */

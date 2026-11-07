@@ -23,6 +23,7 @@
 #include <string>
 #include <utility>
 #include "../../IO/Case/Console.cuh"
+#include "StepSystemCache.cuh"
 namespace emberfield::problem {
     namespace {
         using Clock = std::chrono::steady_clock;
@@ -329,6 +330,8 @@ namespace emberfield::problem {
             IterationSubscription<double, assembly::Index> subscription(*iterative, &observer);
             std::optional<std::size_t> setupRevision;
             std::optional<double> setupDt;
+            detail::ThermalStepSystemCache stepSystems;
+            std::unique_ptr<linalg::IterationContext<double, assembly::Index>> acceptance;
             // 候选经规定值投影和真实残差复核后才接受；历史状态保留至后处理完成。
             auto advance = [&](const systems::LinearSystem& system, const Vector<double>* previous,
                                io::StepRecord record, bool final) -> std::optional<Vector<double>> {
@@ -342,7 +345,10 @@ namespace emberfield::problem {
                     const auto revision = numeric ? numeric->matrixRevision() : 0;
                     if (!setupRevision || *setupRevision != revision || setupDt != record.dt_) {
                         EMBERFIELD_NVTX_SCOPE("emberfield::problem::runCase/solverSetup");
+                        auto nextAcceptance =
+                            std::make_unique<linalg::IterationContext<double, assembly::Index>>(system.matrix());
                         iterative->setup(system.matrix());
+                        acceptance = std::move(nextAcceptance);
                         setupRevision = revision;
                         setupDt = record.dt_;
                     }
@@ -383,7 +389,7 @@ namespace emberfield::problem {
                                                                  numeric ? numeric->parameters().constraints()
                                                                          : constraints.temperatures());
                     tick = Clock::now();
-                    linalg::IterationContext<double, assembly::Index> check(system.matrix());
+                    auto& check = *acceptance;
                     Vector<double> residual(candidate.size());
                     check.residual(system.rhs(), candidate, residual);
                     record.acceptedResidual_ = check.norm(residual);
@@ -503,7 +509,7 @@ namespace emberfield::problem {
                         numeric = assembleThermalState(*evolution, *parameters);
                         model = numeric->model();
                         phase(RunStage::BuildingSystem);
-                        system = buildThermalStepSystem(*numeric, previous, *oldState, *step);
+                        system = stepSystems.build(*numeric, previous, *oldState, *step);
                         assemblyS += elapsed(stage);
                         archive->timing("assembly", assemblyS);
                     }

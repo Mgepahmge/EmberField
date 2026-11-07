@@ -50,3 +50,5 @@ foreach(cudaInclude IN LISTS CUDAToolkit_INCLUDE_DIRS)
     endif()
 endforeach()
 gtest_discover_tests(emberfield_amg_tests NO_PRETTY_VALUES)
+
+target_sources(emberfield_tests PRIVATE Numerics/LinearAlgebra/optimization_test.cpp)

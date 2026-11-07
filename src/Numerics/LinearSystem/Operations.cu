@@ -4,6 +4,7 @@
 #include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <Numerics/LinearSystem/Operations.cuh>
+#include <Numerics/LinearSystem/StepPlan.cuh>
 #include <algorithm>
 #include <cmath>
 #include "../LinearAlgebra/DeviceChecks.cuh"
@@ -120,18 +121,24 @@ namespace emberfield::systems {
                 for (auto j = rp[r]; j < rp[r + 1]; ++j) {
                     const auto c = ci[j];
                     if (mask[r]) {
-                        out[j] = c == static_cast<assembly::Index>(r) ? 1 : 0;
+                        if (out) {
+                            out[j] = c == static_cast<assembly::Index>(r) ? 1 : 0;
+                        }
                     }
                     else if (mask[c]) {
                         const double correction = old[j] * g[c];
                         b -= correction;
-                        out[j] = 0;
+                        if (out) {
+                            out[j] = 0;
+                        }
                         if (!isfinite(correction) || !isfinite(b)) {
                             atomicExch(flag, 1);
                         }
                     }
                     else {
-                        out[j] = old[j];
+                        if (out) {
+                            out[j] = old[j];
+                        }
                     }
                 }
                 rhs[r] = mask[r] ? g[r] : b;
@@ -306,4 +313,97 @@ namespace emberfield::systems {
         flag.verify();
         return detail::SystemAccess::make(std::move(a), std::move(rhs));
     }
+
+    namespace detail {
+        /** @brief 固定系统资源与独占右端暂存。@code Impl p(s,m,dt,dofs); @endcode */
+        struct BackwardEulerPlan::Impl {
+            Matrix original_, eliminated_; ///< 未消元与已消元独立矩阵。
+            std::unique_ptr<linalg::IterationContext<double, assembly::Index>> mass_; ///< 拥有M/dt快照和乘法资源。
+            std::vector<std::uint64_t> dofs_; ///< 固定有序约束集合。
+            CudaBuffer<unsigned char> mask_; ///< 固定约束掩码。
+            CudaBuffer<double> prescribed_; ///< 当前稠密g暂存。
+            /** @brief 创建固定矩阵和资源。@param spatial S。@param capacity M。@param dt 步长。
+             * @param dofs 固定约束集合。@pre 同原后向Euler前提。@return 无。
+             * @code Impl p(s,m,dt,dofs); @endcode */
+            Impl(const Matrix& spatial, const Matrix& capacity, double dt, std::span<const std::uint64_t> dofs) :
+                dofs_(dofs.begin(), dofs.end()) {
+                if (!std::isfinite(dt) || dt <= 0) {
+                    throw std::invalid_argument("后向Euler步长必须为正有限值");
+                }
+                validate(spatial);
+                validate(capacity);
+                const auto n = spatial.rowCount(), nz = spatial.nonZeroCount();
+                const int dev = spatial.rowOffsets().deviceId();
+                device::require(capacity.values(), dev);
+                if (capacity.rowCount() != n || capacity.nonZeroCount() != nz) {
+                    throw std::invalid_argument("空间和容量CSR模式不同");
+                }
+                device::ErrorFlag pattern;
+                equalPattern<<<device::grid(n + 1), 128>>>(n + 1, spatial.rowOffsets().deviceData(),
+                                                           capacity.rowOffsets().deviceData(), pattern.data());
+                equalPattern<<<device::grid(nz), 128>>>(nz, spatial.columnIndices().deviceData(),
+                                                        capacity.columnIndices().deviceData(), pattern.data());
+                try {
+                    pattern.verify();
+                }
+                catch (const std::overflow_error&) {
+                    throw std::invalid_argument("空间和容量CSR模式不同");
+                }
+                Matrix a = spatial, scaledMass = capacity;
+                device::ErrorFlag status;
+                combine<<<device::grid(nz), 128>>>(nz, spatial.deviceValues(), scaledMass.deviceValues(), dt,
+                                                   a.deviceValues(), status.data());
+                status.verify();
+
+                mass_ = std::make_unique<linalg::IterationContext<double, assembly::Index>>(scaledMass);
+                original_ = std::move(a);
+                Vector<double> zero(n);
+                device::check(cudaMemset(zero.deviceData(), 0, n * sizeof(double)));
+                std::vector<double> g(dofs.size(), 0);
+                auto constrained = applyDirichlet(SystemAccess::make(original_, std::move(zero)), dofs, g);
+                eliminated_ = constrained.matrix();
+                std::vector<unsigned char> mask(n, 0);
+                for (auto id : dofs) {
+                    mask[id] = 1; // applyDirichlet已核查集合。
+                }
+                mask_ = CudaBuffer<unsigned char>(mask);
+                prescribed_ = CudaBuffer<double>(n);
+            }
+        };
+        BackwardEulerPlan::BackwardEulerPlan(const Matrix& spatial, const Matrix& capacity, double dt,
+                                             std::span<const std::uint64_t> dofs) :
+            impl_(std::make_unique<Impl>(spatial, capacity, dt, dofs)) {}
+        BackwardEulerPlan::~BackwardEulerPlan() noexcept = default;
+        LinearSystem BackwardEulerPlan::build(const Vector<double>& load, const Vector<double>& previous,
+                                              std::span<const double> prescribed) {
+            EMBERFIELD_NVTX_SCOPE("emberfield::systems::detail::BackwardEulerPlan::build");
+            auto& s = *impl_;
+            const auto n = s.original_.rowCount();
+            const auto dev = s.original_.rowOffsets().deviceId();
+            validate(load, n, dev);
+            validate(previous, n, dev);
+            if (prescribed.size() != s.dofs_.size()) {
+                throw std::invalid_argument("规定值数组长度不匹配");
+            }
+            std::vector<double> g(n, 0);
+            for (std::size_t i = 0; i < prescribed.size(); ++i) {
+                if (!std::isfinite(prescribed[i])) {
+                    throw std::invalid_argument("规定值必须有限");
+                }
+                g[s.dofs_[i]] = prescribed[i];
+            }
+            s.prescribed_.copyFromHost(g);
+            Vector<double> history(n), rhs(n);
+            s.mass_->multiply(previous, history);
+            device::ErrorFlag status;
+            addLoad<<<device::grid(n), 128>>>(n, load.deviceData(), history.deviceData(), status.data());
+            status.verify();
+            eliminate<<<device::grid(n), 128>>>(n, s.original_.rowOffsets().deviceData(),
+                                                s.original_.columnIndices().deviceData(), s.original_.deviceValues(),
+                                                history.deviceData(), s.mask_.deviceData(), s.prescribed_.deviceData(),
+                                                nullptr, rhs.deviceData(), status.data());
+            status.verify();
+            return SystemAccess::make(s.eliminated_, std::move(rhs));
+        }
+    } // namespace detail
 } // namespace emberfield::systems

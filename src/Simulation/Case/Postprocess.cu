@@ -3,6 +3,7 @@
  */
 #define PICOJSON_USE_INT64
 #include <NVTXProfiler.cuh>
+#include <Numerics/LinearAlgebra/IterationContext.cuh>
 #include <Numerics/LinearAlgebra/Operations.cuh>
 #include <Simulation/Case/Postprocess.cuh>
 #include <Simulation/Case/Region.cuh>
@@ -141,6 +142,30 @@ namespace emberfield::problem {
         std::shared_ptr<const PreparedThermalCase> prepared_; ///< 同源准备。
         std::shared_ptr<const field::VisualizationGrid> grid_; ///< 静态可视化网格。
         std::vector<thermal::P1CellSample> cells_; ///< 单元GPU批上传源。
+        std::unique_ptr<thermal::detail::P1PostprocessWorkspace> cellWorkspace_; ///< 借用cells_的有界设备链。
+        std::optional<AssembledThermalModel> spatialOwner_; ///< 保留不可变S身份，防止地址复用。
+        std::optional<AssembledThermalModel> capacityOwner_; ///< 保留固定M身份。
+        std::unique_ptr<linalg::IterationContext<double, assembly::Index>> spatialOperation_,
+            capacityOperation_; ///< 缓存热平衡乘法资源。
+        /** @brief 对不可变模型矩阵复用执行计划。@param model 同源模型。@param x 向量。
+         * @param capacity 是否使用M。@pre 模型来自封闭组装链。@return 新独立设备结果。
+         * @code auto value=s.product(model,t,true); @endcode */
+        Vector<double> product(const AssembledThermalModel& model, const Vector<double>& x, bool capacity) {
+            auto& owner = capacity ? capacityOwner_ : spatialOwner_;
+            auto& operation = capacity ? capacityOperation_ : spatialOperation_;
+            const auto& matrix = capacity ? *model.capacity() : model.spatial();
+            const bool same = owner &&
+                (capacity ? owner->capacity()->deviceValues() : owner->spatial().deviceValues()) ==
+                    matrix.deviceValues();
+            if (!same) {
+                auto candidate = std::make_unique<linalg::IterationContext<double, assembly::Index>>(matrix);
+                owner = model;
+                operation = std::move(candidate);
+            }
+            Vector<double> result(x.size());
+            operation->multiply(x, result);
+            return result;
+        }
         std::vector<thermal::BoundaryPowerSample> boundary_; ///< 已积分自然功率项。
         std::vector<thermal::BoundaryPowerSample> boundaryUnits_; ///< 单位h迹积分，通量使用面积。
         std::vector<double> boundaryAreas_; ///< 自然侧面积乘二维厚度。
@@ -511,6 +536,10 @@ namespace emberfield::problem {
             r.dictionary_ = J(dictionary);
             s.monitors_.push_back(std::move(r));
         }
+        const auto estimated = bytes(batch, 1024) + bytes(points, 128) + bytes(nnz, 64);
+        const auto cacheBudget = std::min<std::size_t>(192ULL * 1024 * 1024, limits.maxDeviceBytes_ - estimated);
+        s.cellWorkspace_ = std::make_unique<thermal::detail::P1PostprocessWorkspace>(
+            s.cells_, std::max<std::size_t>(1, batch), cacheBudget);
     }
     ThermalPostprocessPlan::~ThermalPostprocessPlan() noexcept = default;
     ThermalPostprocessPlan::ThermalPostprocessPlan(ThermalPostprocessPlan&&) noexcept = default;
@@ -549,16 +578,8 @@ namespace emberfield::problem {
         std::vector<thermal::P1CellValue> values(output.fields_.size() > 1 ? n : 0);
         for (std::size_t first = 0; output.fields_.size() > 1 && first < n;) {
             const auto count = std::min(output.limits_.batchCells_, n - first);
-            auto batch = thermal::evaluateP1Gradient(std::span(s.cells_).subspan(first, count), temperature);
-            std::vector<Point> g(count);
-            std::vector<double> k(count);
+            auto batch = s.cellWorkspace_->fields(first, count, temperature);
             for (std::size_t i = 0; i < count; ++i) {
-                std::copy_n(batch[i].gradient_, 3, g[i].begin());
-                k[i] = s.cells_[first + i].conductivity_;
-            }
-            auto q = thermal::applyFourierLaw(g, k);
-            for (std::size_t i = 0; i < count; ++i) {
-                std::copy_n(q[i].begin(), 3, batch[i].flux_);
                 values[first + i] = batch[i];
             }
             first += count;
@@ -689,15 +710,15 @@ namespace emberfield::problem {
             auto& e = result;
             e.status_ = "unavailable";
             if (model.capacity()) {
-                auto energy = linalg::multiply(*model.capacity(), temperature);
+                auto energy = s.product(model, temperature, true);
                 e.storedEnergyJ_ = thermal::sumValues(energy);
             }
             if (!initial) {
-                auto residual = linalg::subtract(linalg::multiply(model.spatial(), temperature), model.load());
+                auto residual = linalg::subtract(s.product(model, temperature, false), model.load());
                 e.storagePowerW_ = 0;
                 if (previous) {
                     const auto change = linalg::subtract(temperature, *previous);
-                    const auto power = linalg::multiply(*model.capacity(), change);
+                    const auto power = s.product(model, change, true);
                     e.storagePowerW_ = thermal::sumValues(power) / *dt;
                     residual = linalg::add(residual, power, 1 / *dt);
                 }
@@ -805,12 +826,7 @@ namespace emberfield::problem {
                                               s.constraints(state));
             for (std::size_t first = 0; first < s.cells_.size();) {
                 const auto count = std::min(definition.output_.limits_.batchCells_, s.cells_.size() - first);
-                const auto values = thermal::evaluateP1Gradient(std::span(s.cells_).subspan(first, count), temperature);
-                std::vector<double> volumes(count);
-                for (std::size_t i = 0; i < count; ++i) {
-                    volumes[i] = s.cells_[first + i].volume_;
-                }
-                const auto statistics = thermal::reduceRegion(values, volumes);
+                const auto statistics = s.cellWorkspace_->region(first, count, temperature);
                 low = std::min(low, statistics.minimum_);
                 high = std::max(high, statistics.maximum_);
                 first += count;

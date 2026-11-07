@@ -5,6 +5,7 @@
 #include <DataStructure/Storage/Vector.cuh>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <vector>
 namespace emberfield::thermal {
@@ -74,3 +75,38 @@ namespace emberfield::thermal {
     std::vector<double> interpolateTemperature(std::span<const TemperatureSample> samples,
                                                const Vector<double>& temperature);
 } // namespace emberfield::thermal
+
+/** @brief 后处理专用的有界设备执行组件，不改变独立主机适配接口。 */
+namespace emberfield::thermal::detail {
+    /** @brief 固定P1样本可选常驻，批中间场留在设备；不可并发。
+     * @details 借用samples至析构，调用方禁止修改/搬移；最多缓存cacheBytes，超限显式流式。
+     * @code P1PostprocessWorkspace work(samples,4096,256*1024*1024); @endcode */
+    class P1PostprocessWorkspace {
+    public:
+        /** @brief 建立批工作区。@param samples 静态样本借用。@param batchCapacity 最大批。
+         * @param cacheBytes 可选静态缓存字节上限，0禁用。@pre 样本生命周期覆盖本对象。
+         * @return 无，非法参数invalid_argument，CUDA错误传播。
+         * @code P1PostprocessWorkspace work(samples,4096,0); @endcode */
+        P1PostprocessWorkspace(std::span<const P1CellSample> samples, std::size_t batchCapacity,
+                               std::size_t cacheBytes);
+        /** @brief 释放设备资源，无参数无额外前提。@return 无。
+         * @code { P1PostprocessWorkspace work(samples,4096,0); } @endcode */
+        ~P1PostprocessWorkspace() noexcept;
+        P1PostprocessWorkspace(const P1PostprocessWorkspace&) = delete; ///< 独占批资源。
+        P1PostprocessWorkspace& operator=(const P1PostprocessWorkspace&) = delete; ///< 不复制。
+        /** @brief 设备梯度与Fourier连续计算后一次下载最终字段。
+         * @param first 首单元。@param count 批长。@param temperature 温度。
+         * @pre 合法非空切片，同设备global且温度已验证。@return 独立主机结果。
+         * @code auto values = work.fields(0,n,t); @endcode */
+        std::vector<P1CellValue> fields(std::size_t first, std::size_t count, const Vector<double>& temperature);
+        /** @brief 只下载区域统计，不下载逐单元结果。
+         * @param first 首单元。@param count 批长。@param temperature 温度。
+         * @pre 同fields；保留原单block256归约次序。@return 区域统计。
+         * @code auto stats = work.region(0,n,t); @endcode */
+        RegionStatistics region(std::size_t first, std::size_t count, const Vector<double>& temperature);
+
+    private:
+        struct Impl; ///< 静态样本借用、设备输入/输出/状态。
+        std::unique_ptr<Impl> impl_; ///< 独占执行状态。
+    };
+} // namespace emberfield::thermal::detail

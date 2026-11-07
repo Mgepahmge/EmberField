@@ -3,6 +3,7 @@
  */
 #include <NVTXProfiler.cuh>
 #include <Numerics/LinearAlgebra/IterationContext.cuh>
+#include <Numerics/LinearAlgebra/SpmvPlan.cuh>
 #include <cmath>
 #include <cublas_v2.h>
 #include <cusparse.h>
@@ -38,47 +39,20 @@ namespace emberfield::linalg {
      */
     template <Scalar T, CsrIndex I>
     struct IterationContext<T, I>::Impl {
-        CsrMatrix<T, I> matrix_; ///< 规范化 global 矩阵。
-        Vector<T> input_, output_; ///< 描述符初始占位存储。
-        CudaBuffer<std::byte> workspace_; ///< SpMV 工作区。
-        cublasHandle_t blas_{}; ///< 持久化 BLAS 句柄。
-        cusparseHandle_t sparse_{}; ///< 持久化稀疏句柄。
-        cusparseSpMatDescr_t a_{}; ///< 矩阵描述符。
-        cusparseDnVecDescr_t x_{}, y_{}; ///< 可重绑定的向量描述符。
+        detail::SpmvPlan<T, I> spmv_; ///< 共享快照与独立稀疏执行资源。
+        const CsrMatrix<T, I>& matrix_; ///< 借用spmv_拥有的矩阵，兼容旧只读接口。
+        cublasHandle_t blas_{}; ///< 持久化BLAS句柄。
         int device_{}; ///< 资源所属设备。
         /** @brief 建立所有资源。@param matrix 输入。
          * @pre 当前设备正确。@note 无返回值。@code Impl state(matrix); @endcode
          */
-        explicit Impl(const CsrMatrix<T, I>& matrix) :
-            matrix_(detail::canonical<I>(matrix)), input_(matrix.columnCount()), output_(matrix.rowCount()) {
+        explicit Impl(detail::CanonicalCsrSnapshot<T, I> matrix) : spmv_(std::move(matrix)), matrix_(spmv_.matrix()) {
             EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::Impl::Impl",
                                         emberfield::NvtxColor::Cyan);
             check(cudaGetDevice(&device_));
-            for (auto value : detail::hostCopy(matrix_.values())) {
-                if (!std::isfinite(value)) {
-                    throw std::invalid_argument("Matrix contains nonfinite entries");
-                }
-            }
             try {
                 check(cublasCreate(&blas_));
                 check(cublasSetMathMode(blas_, CUBLAS_PEDANTIC_MATH));
-                check(cusparseCreate(&sparse_));
-                if (matrix_.rowCount() && matrix_.columnCount() && matrix_.nonZeroCount()) {
-                    const auto index = sizeof(I) == 4 ? CUSPARSE_INDEX_32I : CUSPARSE_INDEX_64I;
-                    const auto type = std::same_as<T, float> ? CUDA_R_32F : CUDA_R_64F;
-                    check(cusparseCreateCsr(&a_, matrix_.rowCount(), matrix_.columnCount(), matrix_.nonZeroCount(),
-                                            const_cast<I*>(matrix_.rowOffsets().deviceData()),
-                                            const_cast<I*>(matrix_.columnIndices().deviceData()),
-                                            const_cast<T*>(matrix_.values().deviceData()), index, index,
-                                            CUSPARSE_INDEX_BASE_ZERO, type));
-                    check(cusparseCreateDnVec(&x_, input_.size(), input_.deviceData(), type));
-                    check(cusparseCreateDnVec(&y_, output_.size(), output_.deviceData(), type));
-                    const T one = 1, zero = 0;
-                    std::size_t size{};
-                    check(cusparseSpMV_bufferSize(sparse_, CUSPARSE_OPERATION_NON_TRANSPOSE, &one, a_, x_, &zero, y_,
-                                                  type, CUSPARSE_SPMV_ALG_DEFAULT, &size));
-                    workspace_ = CudaBuffer<std::byte>(size);
-                }
             }
             catch (...) {
                 release();
@@ -91,18 +65,6 @@ namespace emberfield::linalg {
         void release() noexcept {
             EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::Impl::release",
                                         emberfield::NvtxColor::Cyan);
-            if (y_) {
-                cusparseDestroyDnVec(y_);
-            }
-            if (x_) {
-                cusparseDestroyDnVec(x_);
-            }
-            if (a_) {
-                cusparseDestroySpMat(a_);
-            }
-            if (sparse_) {
-                cusparseDestroy(sparse_);
-            }
             if (blas_) {
                 cublasDestroy(blas_);
             }
@@ -133,7 +95,14 @@ namespace emberfield::linalg {
         detail::librarySize(matrix.rowCount());
         detail::librarySize(matrix.columnCount());
         detail::OperationScope scope(matrix.rowOffsets().deviceId());
-        impl_ = std::make_unique<Impl>(matrix);
+        impl_ = std::make_unique<Impl>(detail::freezeCanonical(matrix));
+    }
+    template <Scalar T, CsrIndex I>
+    IterationContext<T, I>::IterationContext(detail::CanonicalCsrSnapshot<T, I> snapshot) {
+        detail::librarySize(snapshot.matrix().rowCount());
+        detail::librarySize(snapshot.matrix().columnCount());
+        detail::OperationScope scope(snapshot.matrix().rowOffsets().deviceId());
+        impl_ = std::make_unique<Impl>(std::move(snapshot));
     }
     template <Scalar T, CsrIndex I>
     IterationContext<T, I>::~IterationContext() noexcept = default;
@@ -145,24 +114,7 @@ namespace emberfield::linalg {
     void IterationContext<T, I>::multiply(const Vector<T>& x, Vector<T>& y) {
         EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::linalg::IterationContext<T, I>::multiply",
                                     emberfield::NvtxColor::Cyan);
-        impl_->validate(x);
-        impl_->validate(y);
-        if (x.size() != impl_->matrix_.columnCount() || y.size() != impl_->matrix_.rowCount() ||
-            (x.size() && x.data() == y.data())) {
-            throw std::invalid_argument("SpMV shape or alias mismatch");
-        }
-        detail::OperationScope scope(impl_->device_);
-        if (!impl_->a_) {
-            detail::zero(y.deviceData(), y.size());
-            return;
-        }
-        check(cusparseDnVecSetValues(impl_->x_, const_cast<T*>(x.deviceData())));
-        check(cusparseDnVecSetValues(impl_->y_, y.deviceData()));
-        const T one = 1, zero = 0;
-        check(cusparseSpMV(impl_->sparse_, CUSPARSE_OPERATION_NON_TRANSPOSE, &one, impl_->a_, impl_->x_, &zero,
-                           impl_->y_, std::same_as<T, float> ? CUDA_R_32F : CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT,
-                           impl_->workspace_.deviceData()));
-        check(cudaStreamSynchronize(nullptr));
+        impl_->spmv_.multiply(x, y);
     }
     template <Scalar T, CsrIndex I>
     void IterationContext<T, I>::clear(Vector<T>& x) {

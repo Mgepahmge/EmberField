@@ -2,7 +2,7 @@
  * @brief 定义迭代计算使用的持久化 CUDA 库句柄、稀疏描述符和工作区。
  */
 #pragma once
-#include <Numerics/LinearAlgebra/Operations.cuh>
+#include <Numerics/LinearAlgebra/CanonicalCsrSnapshot.cuh>
 #include <memory>
 
 namespace emberfield::linalg {
@@ -30,6 +30,10 @@ namespace emberfield::linalg {
          * @code IterationContext<double> context(matrix); @endcode
          */
         explicit IterationContext(const CsrMatrix<T, I>& matrix);
+        /** @brief 共享独立规范快照，不重复导入或复制矩阵。
+         * @param snapshot 已发布快照。@pre 维度不超过INT_MAX，CUDA设备有效。
+         * @return 无。@code IterationContext<double> context(frozen); @endcode */
+        explicit IterationContext(detail::CanonicalCsrSnapshot<T, I> snapshot);
         /** @brief 释放所属设备上的资源，无参数、无额外约束。@note 无返回值。
          * @code { IterationContext<double> context(matrix); } @endcode
          */

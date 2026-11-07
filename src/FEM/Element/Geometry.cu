@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include "GeometryAccess.cuh"
 
 namespace emberfield::fem {
     namespace {
@@ -263,6 +264,12 @@ namespace emberfield::fem {
     std::shared_ptr<const PreparedGeometry> buildPreparedGeometry(std::shared_ptr<const FiniteElementSpace> space,
                                                                   const GeometryOptions& o, std::size_t maxCells,
                                                                   std::size_t maxFacetUses) {
+        return detail::GeometryAccess::build(std::move(space), o, maxCells, maxFacetUses, {});
+    }
+    std::shared_ptr<const PreparedGeometry>
+    detail::GeometryAccess::build(std::shared_ptr<const FiniteElementSpace> space, const GeometryOptions& o,
+                                  std::size_t maxCells, std::size_t maxFacetUses,
+                                  std::shared_ptr<const mesh::FacetTopology> topology) {
         EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::fem::buildPreparedGeometry", emberfield::NvtxColor::Green);
         if (!space || !maxCells || !maxFacetUses) {
             throw std::invalid_argument("空间不能为空且几何限额必须为正");
@@ -286,13 +293,15 @@ namespace emberfield::fem {
         for (std::size_t row = 0; row < p->space_->cellCount(); ++row) {
             p->cells_.push_back(buildCellGeometry(*p->space_, row, o));
         }
-        p->topology_ = mesh::buildFacetTopology(p->space_->mesh(), p->space_->cells(), maxFacetUses);
-        if (!p->topology_.unsupported_.empty()) {
-            fail(EvaluationCode::NonmanifoldTopology, "未知单元侧布局", p->topology_.unsupported_[0]);
+        p->topology_ = topology ? std::move(topology)
+                                : std::make_shared<const mesh::FacetTopology>(
+                                      mesh::buildFacetTopology(p->space_->mesh(), p->space_->cells(), maxFacetUses));
+        if (!p->topology_->unsupported_.empty()) {
+            fail(EvaluationCode::NonmanifoldTopology, "未知单元侧布局", p->topology_->unsupported_[0]);
         }
-        p->exterior_.resize(p->topology_.facets_.size());
-        for (std::size_t i = 0; i < p->topology_.facets_.size(); ++i) {
-            const auto& uses = p->topology_.facets_[i].uses_;
+        p->exterior_.resize(p->topology_->facets_.size());
+        for (std::size_t i = 0; i < p->topology_->facets_.size(); ++i) {
+            const auto& uses = p->topology_->facets_[i].uses_;
             if (uses.empty() || uses.size() > 2) {
                 throw EvaluationError(EvaluationCode::NonmanifoldTopology, EvaluationStage::Geometry, "活动侧非流形");
             }

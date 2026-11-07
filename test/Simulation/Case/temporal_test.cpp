@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <sstream>
+#include "../../../src/Simulation/Case/StepSystemCache.cuh"
 #include "support/AssemblyFixture.cuh"
 #include "support/CaseFixture.cuh"
 #include "support/IntegrationFixture.cuh"
@@ -447,4 +448,28 @@ TEST(TimeField, extremeInterpolationAndWholeCurveEquality) {
     EXPECT_TRUE(equivalentFields(a, b, 0, 2));
     ScalarField c = TimeTableScalar{{{0, 300}, {1, 300}, {2, 400}}};
     EXPECT_FALSE(equivalentFields(a, c, 0, 2));
+}
+
+TEST_F(GpuAssembly, CachedStepSystemTracksEventsHChangesAndSourceIdentity) {
+    auto prepared = prepareTime(timeCase());
+    EXPECT_EQ(&prepared->geometry()->topology(), &prepared->bound()->data().topology_);
+    auto plan = buildThermalEvolutionPlan(prepared);
+    ThermalEvolutionContext evolution(plan);
+    emberfield::problem::detail::ThermalStepSystemCache cache;
+    auto old = evaluateThermalState(plan, 0);
+    Vector<double> previous{std::span<const double>(*prepared->conditions()->initialTemperature())};
+    const auto& dofs = prepared->conditions()->constraints().dofs();
+    previous = systems::projectTemperatureState(previous, dofs, old.constraints());
+    // Same dt with changing h/load/g, then event shortened interval and a repeated dt.
+    for (auto [start, end] : {std::pair{0., .5}, std::pair{.5, 1.}, std::pair{1., 1.25}, std::pair{1.25, 1.5}}) {
+        auto state = evaluateThermalState(plan, end);
+        auto numeric = evolution.assemble(state);
+        TimeStep step{1, start, end, end - start};
+        auto expected = buildThermalStepSystem(numeric, previous, old, step);
+        auto actual = cache.build(numeric, previous, old, step);
+        EXPECT_EQ(host(actual.matrix().values()), host(expected.matrix().values()));
+        EXPECT_EQ(host(actual.rhs().values()), host(expected.rhs().values()));
+        previous = systems::projectTemperatureState(previous, dofs, state.constraints());
+        old = state;
+    }
 }

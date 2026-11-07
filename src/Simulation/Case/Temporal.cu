@@ -7,6 +7,7 @@
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+#include "StepSystemCache.cuh"
 #include "ThermalSampling.cuh"
 
 namespace emberfield::problem {
@@ -60,13 +61,15 @@ namespace emberfield::problem {
             return n;
         }
         /** @brief GPU计算一类完整体源向量。@param plan 计划。@param state 数值参数。
-         * @pre 同源。@return 设备载荷。@code auto f=volumeLoad(p,s); @endcode */
+         * @param observer 可空借用观察者。@param execution 同源串行稳定映射缓存。
+         * @pre 同源。@return 设备载荷。@code auto f=volumeLoad(p,s,observer,execution); @endcode */
         Vector<double> volumeLoad(const ThermalAssemblyPlan& plan, const EvaluatedThermalState& state,
-                                  ProgressObserver* observer) {
+                                  ProgressObserver* observer,
+                                  std::shared_ptr<assembly::detail::DeviceAssemblyPlan> execution) {
             EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::volumeLoad", emberfield::NvtxColor::Yellow);
             const auto& p = *plan.prepared();
             const auto limits = plan.options().gpuLimits_;
-            assembly::AssemblyAccumulator result(plan.plan());
+            assembly::AssemblyAccumulator result(plan.plan(), execution);
             const auto maxBatch = batchSize(plan, p.space()->dimension() == 2 ? 18 : 48);
             if (observer) {
                 observer->onProgress({ProgressWork::VolumeLoad, 0, p.space()->cellCount(), true});
@@ -107,16 +110,18 @@ namespace emberfield::problem {
             return std::move(result).release().load_;
         }
         /** @brief GPU计算通量或对流类，保持自然项原顺序。@param plan 计划。@param state 参数。
-         * @param flux 是否通量。@param matrix 是否组装H。@param observer 可空借用观察者。@pre 同源。@return
+         * @param flux 是否通量。@param matrix 是否组装H。@param observer 可空借用观察者。
+         * @param execution 同源串行稳定映射缓存。@pre 同源。@return
          * 当前类矩阵载荷。
          * @code auto h=boundaryValues(p,s,false,true); @endcode */
         assembly::AssemblyValues boundaryValues(const ThermalAssemblyPlan& plan, const EvaluatedThermalState& state,
-                                                bool flux, bool matrix, ProgressObserver* observer) {
+                                                bool flux, bool matrix, ProgressObserver* observer,
+                                                std::shared_ptr<assembly::detail::DeviceAssemblyPlan> execution) {
             EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::problem::boundaryValues", emberfield::NvtxColor::Yellow);
             const auto& p = *plan.prepared();
             const auto& terms = p.conditions()->naturalTerms();
             const auto& boundaries = p.bound()->data().definition_.boundaries_;
-            assembly::AssemblyAccumulator result(plan.plan());
+            assembly::AssemblyAccumulator result(plan.plan(), execution);
             const auto maxBatch = batchSize(plan, p.space()->dimension() == 2 ? 4 : 9);
             std::size_t completed = 0, total = 0;
             if (observer) {
@@ -309,6 +314,7 @@ namespace emberfield::problem {
         std::shared_ptr<const Vector<double>> load_; ///< 当前总载荷。
         std::shared_ptr<const EvaluatedThermalState> last_; ///< 上次数值依赖。
         std::size_t revision_{}; ///< 当前S版本。
+        std::shared_ptr<assembly::detail::DeviceAssemblyPlan> assemblyExecution_; ///< 同源稳定映射缓存。
     };
     ThermalEvolutionContext::ThermalEvolutionContext(std::shared_ptr<const ThermalEvolutionPlan> plan) :
         ThermalEvolutionContext(std::move(plan), nullptr) {}
@@ -328,7 +334,9 @@ namespace emberfield::problem {
         const auto& planRef = *impl_->plan_->assemblyPlan();
         const auto& p = *planRef.prepared();
         const auto initial = evaluateThermalState(impl_->plan_, p.bound()->data().definition_.time_->start_);
-        assembly::AssemblyAccumulator k(planRef.plan()), mass(planRef.plan());
+        impl_->assemblyExecution_ = std::make_shared<assembly::detail::DeviceAssemblyPlan>(planRef.plan());
+        assembly::AssemblyAccumulator k(planRef.plan(), impl_->assemblyExecution_),
+            mass(planRef.plan(), impl_->assemblyExecution_);
         const auto maxBatch = batchSize(planRef, p.space()->dimension() == 2 ? 18 : 48);
         if (observer) {
             observer->onProgress({ProgressWork::Cells, 0, p.space()->cellCount(), true});
@@ -379,15 +387,16 @@ namespace emberfield::problem {
         const bool sourceChanged = !c.last_ || state.sources() != c.last_->sources();
         if (sourceChanged) {
             EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateSource");
-            volume = std::make_shared<const Vector<double>>(volumeLoad(plan, state, c.observer_));
+            volume = std::make_shared<const Vector<double>>(volumeLoad(plan, state, c.observer_, c.assemblyExecution_));
         }
         if (fluxChanged) {
             EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateFlux");
-            flux = std::make_shared<const Vector<double>>(boundaryValues(plan, state, true, false, c.observer_).load_);
+            flux = std::make_shared<const Vector<double>>(
+                boundaryValues(plan, state, true, false, c.observer_, c.assemblyExecution_).load_);
         }
         if (hChanged || ambientChanged) {
             EMBERFIELD_NVTX_SCOPE("emberfield::problem::ThermalEvolutionContext::assemble/updateConvection");
-            auto values = boundaryValues(plan, state, false, hChanged, c.observer_);
+            auto values = boundaryValues(plan, state, false, hChanged, c.observer_, c.assemblyExecution_);
             ambient = std::make_shared<const Vector<double>>(std::move(values.load_));
             if (hChanged) {
                 if (revision == SIZE_MAX) {
@@ -440,5 +449,34 @@ namespace emberfield::problem {
         return systems::applyDirichlet(systems::buildBackwardEulerSystem(model.spatial(), *model.capacity(),
                                                                          model.load(), previous, step.duration_),
                                        dofs, state.constraints());
+    }
+
+    systems::LinearSystem detail::ThermalStepSystemCache::build(const ThermalNumericState& numeric,
+                                                                const Vector<double>& previous,
+                                                                const EvaluatedThermalState& old,
+                                                                const TimeStep& step) {
+        EMBERFIELD_NVTX_SCOPE("emberfield::problem::detail::ThermalStepSystemCache::build");
+        const auto& state = numeric.parameters();
+        const auto& model = numeric.model();
+        if (state.plan() != old.plan() || old.time() != step.start_ || state.time() != step.end_ ||
+            !std::isfinite(step.duration_) || step.duration_ <= 0 || step.duration_ != step.end_ - step.start_ ||
+            model.plan() != state.plan()->assemblyPlan()) {
+            throw std::invalid_argument("时变系统来源或时间错配");
+        }
+        const auto& dofs = model.plan()->prepared()->conditions()->constraints().dofs();
+        systems::validateTemperatureState(previous, dofs, old.constraints());
+        const bool hit = owner_ && owner_->parameters().plan() == state.plan() && dt_ == step.duration_ &&
+            owner_->model().spatial().deviceValues() == model.spatial().deviceValues() &&
+            owner_->model().capacity()->deviceValues() == model.capacity()->deviceValues();
+        if (hit) {
+            return plan_->build(model.load(), previous, state.constraints());
+        }
+        auto candidate = std::make_unique<systems::detail::BackwardEulerPlan>(model.spatial(), *model.capacity(),
+                                                                              step.duration_, dofs);
+        auto result = candidate->build(model.load(), previous, state.constraints());
+        owner_ = numeric;
+        dt_ = step.duration_;
+        plan_ = std::move(candidate);
+        return result;
     }
 } // namespace emberfield::problem

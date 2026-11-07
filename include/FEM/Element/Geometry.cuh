@@ -7,6 +7,9 @@
 #include <limits>
 
 namespace emberfield::fem {
+    namespace detail {
+        class GeometryAccess;
+    }
     /** @brief 坐标解释，不把任意嵌入曲面自动当平面。 */
     enum class GeometryFrame { PlanarXY, SolidXYZ };
     /** @brief 坐标与数值质量选项；入口统一验证。
@@ -157,7 +160,7 @@ namespace emberfield::fem {
         [[nodiscard]] const std::vector<AffineCellGeometry>& cells() const noexcept { return cells_; }
 
         /** @brief 独立侧拓扑；无参数无额外前提。@return 只读值或借用引用。@code auto value=obj.topology(); @endcode */
-        [[nodiscard]] const mesh::FacetTopology& topology() const noexcept { return topology_; }
+        [[nodiscard]] const mesh::FacetTopology& topology() const noexcept { return *topology_; }
 
         /** @brief 查询一个外侧。@param index 拓扑侧行。@pre 无。
          * @return 只读侧记录；越界out_of_range，内部侧invalid_argument。
@@ -166,13 +169,11 @@ namespace emberfield::fem {
 
     private:
         PreparedGeometry() = default; ///< 仅工厂候选。
-        friend std::shared_ptr<const PreparedGeometry> buildPreparedGeometry(std::shared_ptr<const FiniteElementSpace>,
-                                                                             const GeometryOptions&, std::size_t,
-                                                                             std::size_t);
+        friend class detail::GeometryAccess; ///< 内部工厂可共享经同源核查的拓扑。
         std::shared_ptr<const FiniteElementSpace> space_; ///< 不可变空间所有权。
         GeometryOptions options_; ///< 统一策略。
         std::vector<AffineCellGeometry> cells_; ///< 活动行几何。
-        mesh::FacetTopology topology_; ///< 活动侧拓扑。
+        std::shared_ptr<const mesh::FacetTopology> topology_; ///< 独立工厂拥有或内部同源共享的只读拓扑。
         std::vector<std::optional<FacetGeometry>> exterior_; ///< 仅外侧槽有记录。
     };
 } // namespace emberfield::fem

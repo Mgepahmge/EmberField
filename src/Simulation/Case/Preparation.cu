@@ -5,6 +5,7 @@
 #include <Simulation/Case/Preparation.cuh>
 #include <Simulation/Case/Temporal.cuh>
 #include <cmath>
+#include "../../FEM/Element/GeometryAccess.cuh"
 #include "../Thermal/LocalResultAccess.cuh"
 #include "ConditionSupport.cuh"
 #include "ThermalSampling.cuh"
@@ -37,7 +38,9 @@ namespace emberfield::problem {
         geometryOptions.normalTolerance_ = o.normalTolerance_;
         std::shared_ptr<const fem::PreparedGeometry> geometry;
         try {
-            geometry = fem::buildPreparedGeometry(s, geometryOptions, o.maxCells_, o.maxFacetUses_);
+            auto topology = std::shared_ptr<const mesh::FacetTopology>(b, &b->data().topology_);
+            geometry = fem::detail::GeometryAccess::build(s, geometryOptions, o.maxCells_, o.maxFacetUses_,
+                                                          std::move(topology));
             result.stages_[0] = StageStatus::Passed;
         }
         catch (const fem::EvaluationError& e) {

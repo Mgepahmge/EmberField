@@ -247,20 +247,23 @@ namespace emberfield::problem {
         }
         const auto& data = b->data();
         const auto& def = data.definition_;
-        // 独立拓扑与绑定拓扑逐项比较，避免把两个同长度侧表的索引互换使用。
-        const auto topology = mesh::buildFacetTopology(s->mesh(), s->cells(), o.maxFacetUses_);
-        if (!topology.unsupported_.empty() || topology.facets_.size() != data.topology_.facets_.size()) {
+        // context已核对同一Mesh、相同活动单元及顺序；绑定对象不可变，复用其拓扑。
+        std::size_t facetUses = 0;
+        for (std::size_t row = 0; row < s->cellCount(); ++row) {
+            const auto sides = fem::referenceElement(s->elementKey(row)).facetCount();
+            if (sides > o.maxFacetUses_ - facetUses) {
+                detail::issue(diagnostics, "PREPARATION_LIMIT", "侧use超过限额");
+                return result;
+            }
+            facetUses += sides;
+        }
+        const auto& topology = data.topology_;
+        if (!topology.unsupported_.empty()) {
             detail::issue(diagnostics, "PREPARATION_TOPOLOGY_MISMATCH", "绑定与空间活动侧拓扑不一致");
             return result;
         }
-        for (std::size_t i = 0; i < topology.facets_.size(); ++i) {
-            const auto& a = topology.facets_[i];
-            const auto& c = data.topology_.facets_[i];
-            bool equal = a.nodes_ == c.nodes_ && a.uses_.size() == c.uses_.size();
-            for (std::size_t j = 0; equal && j < a.uses_.size(); ++j) {
-                equal = a.uses_[j].cell_ == c.uses_[j].cell_ && a.uses_[j].localSide_ == c.uses_[j].localSide_;
-            }
-            if (!equal || a.uses_.empty() || a.uses_.size() > 2) {
+        for (const auto& facet : topology.facets_) {
+            if (facet.uses_.empty() || facet.uses_.size() > 2) {
                 detail::issue(diagnostics, "PREPARATION_TOPOLOGY_MISMATCH", "侧身份、母侧或流形性不一致");
                 return result;
             }

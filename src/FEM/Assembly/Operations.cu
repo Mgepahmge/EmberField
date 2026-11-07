@@ -5,7 +5,10 @@
 #include <NVTXProfiler.cuh>
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <list>
 #include <numeric>
+#include <optional>
 #include "../../Numerics/LinearAlgebra/DeviceChecks.cuh"
 namespace emberfield::assembly {
     namespace {
@@ -39,10 +42,14 @@ namespace emberfield::assembly {
             }
         }
     } // namespace
-    AssemblyAccumulator::AssemblyAccumulator(std::shared_ptr<const AssemblyPlan> plan) : plan_(std::move(plan)) {
+    AssemblyAccumulator::AssemblyAccumulator(std::shared_ptr<const AssemblyPlan> plan) :
+        AssemblyAccumulator(plan, std::make_shared<detail::DeviceAssemblyPlan>(plan)) {}
+    AssemblyAccumulator::AssemblyAccumulator(std::shared_ptr<const AssemblyPlan> plan,
+                                             std::shared_ptr<detail::DeviceAssemblyPlan> execution) :
+        plan_(std::move(plan)), execution_(std::move(execution)) {
         EMBERFIELD_NVTX_SCOPE_COLOR("emberfield::assembly::AssemblyAccumulator::AssemblyAccumulator",
                                     emberfield::NvtxColor::Green);
-        if (!plan_) {
+        if (!plan_ || !execution_ || execution_->source() != plan_) {
             throw std::invalid_argument("组装计划为空");
         }
         CudaBuffer<Index> offsets{std::span<const Index>(plan_->rowOffsets())};
@@ -77,48 +84,154 @@ namespace emberfield::assembly {
         if (entries.size() != length) {
             throw std::invalid_argument("局部平铺输入数量不匹配");
         }
-        std::vector<Index> slots;
-        slots.reserve(length);
-        if (matrix) {
-            slots.insert(slots.end(), plan_->matrixSlots().begin() + start,
-                         plan_->matrixSlots().begin() + start + length);
-        }
-        else {
-            for (auto e = first; e < first + count; ++e) {
-                for (auto dof : plan_->stencils()[e]) {
-                    slots.push_back(static_cast<Index>(dof));
+        execution_->accumulate(first, count, entries, matrix, matrix ? matrix_.deviceValues() : load_.deviceData());
+    }
+
+    namespace detail {
+        /** @brief 已排序映射、设备缓存和候选工作区。@code Impl c(plan,budget); @endcode */
+        struct DeviceAssemblyPlan::Impl {
+            /** @brief 固定切片的稳定映射；不持有本次局部数值。@code Entry entry; @endcode */
+            struct Entry {
+                std::size_t first_{}, count_{}; ///< 模板切片键。
+                bool matrix_{}; ///< 矩阵或向量类别。
+                std::size_t bytes_{}; ///< 此条目的设备映射字节数。
+                CudaBuffer<Index> targets_; ///< 设备目标槽。
+                CudaBuffer<std::size_t> boundaries_, order_; ///< 设备段边界与稳定局部序。
+            };
+            std::shared_ptr<const AssemblyPlan> plan_; ///< 来源身份。
+            std::size_t budget_, used_{}, builds_{}, hits_{}; ///< 映射预算、驻留与计数。
+            int device_; ///< 固定设备。
+            std::list<Entry> maps_; ///< 最近使用在前；每项只驻留设备，不重复保留主机数组。
+            CudaBuffer<double> next_; ///< 有界高水位候选，超限仅本次兼容分配。
+            CudaBuffer<int> status_; ///< 重用状态，每次重置。
+            /** @brief 绑定来源。@param plan 来源。@param budget 缓存字节。
+             * @pre 非空来源且设备可用。@return 无。@code Impl c(plan,budget); @endcode */
+            Impl(std::shared_ptr<const AssemblyPlan> plan, std::size_t budget) :
+                plan_(std::move(plan)), budget_(budget), status_(1) {
+                if (!plan_) {
+                    throw std::invalid_argument("组装计划为空");
+                }
+                device::check(cudaGetDevice(&device_));
+            }
+            /** @brief 创建一次固定映射。@param first 起点。@param count 数量。@param matrix 类别。
+             * @pre 切片合法。@return 独立设备映射。@code auto m=build(first,count,true); @endcode */
+            Entry build(std::size_t first, std::size_t count, bool matrix) {
+                ++builds_;
+                const auto& offsets = matrix ? plan_->matrixOffsets() : plan_->vectorOffsets();
+                const auto start = offsets[first], length = offsets[first + count] - start;
+                std::vector<Index> slots;
+                slots.reserve(length);
+                if (matrix) {
+                    slots.insert(slots.end(), plan_->matrixSlots().begin() + start,
+                                 plan_->matrixSlots().begin() + start + length);
+                }
+                else {
+                    for (auto e = first; e < first + count; ++e) {
+                        for (auto dof : plan_->stencils()[e]) {
+                            slots.push_back(static_cast<Index>(dof));
+                        }
+                    }
+                }
+                std::vector<std::size_t> order(length);
+                std::iota(order.begin(), order.end(), 0);
+                {
+                    EMBERFIELD_NVTX_SCOPE("emberfield::assembly::AssemblyAccumulator::add/sortSlots");
+                    std::stable_sort(order.begin(), order.end(),
+                                     [&](std::size_t a, std::size_t b) { return slots[a] < slots[b]; });
+                }
+                std::vector<Index> targets;
+                std::vector<std::size_t> boundaries;
+                for (std::size_t i = 0; i < length; ++i) {
+                    if (!i || slots[order[i]] != targets.back()) {
+                        targets.push_back(slots[order[i]]);
+                        boundaries.push_back(i);
+                    }
+                }
+                boundaries.push_back(length);
+
+                Entry result;
+                result.first_ = first;
+                result.count_ = count;
+                result.matrix_ = matrix;
+                const auto all =
+                    emberfield::detail::checkedProduct(order.size() + boundaries.size(), sizeof(std::size_t));
+                const auto targetBytes = emberfield::detail::checkedProduct(targets.size(), sizeof(Index));
+                if (all > std::numeric_limits<std::size_t>::max() - targetBytes) {
+                    throw std::overflow_error("映射字节计数溢出");
+                }
+                result.bytes_ = all + targetBytes;
+                result.targets_ = CudaBuffer<Index>(targets);
+                result.boundaries_ = CudaBuffer<std::size_t>(boundaries);
+                result.order_ = CudaBuffer<std::size_t>(order);
+                return result;
+            }
+        };
+        DeviceAssemblyPlan::DeviceAssemblyPlan(std::shared_ptr<const AssemblyPlan> p, std::size_t budget) :
+            impl_(std::make_unique<Impl>(std::move(p), budget)) {}
+        DeviceAssemblyPlan::~DeviceAssemblyPlan() noexcept = default;
+        const std::shared_ptr<const AssemblyPlan>& DeviceAssemblyPlan::source() const noexcept { return impl_->plan_; }
+        std::size_t DeviceAssemblyPlan::mappingBuilds() const noexcept { return impl_->builds_; }
+        std::size_t DeviceAssemblyPlan::cacheHits() const noexcept { return impl_->hits_; }
+        void DeviceAssemblyPlan::accumulate(std::size_t first, std::size_t count, const CudaBuffer<double>& entries,
+                                            bool matrix, double* output) {
+            auto& s = *impl_;
+            device::require(entries, s.device_);
+            auto found = std::find_if(s.maps_.begin(), s.maps_.end(), [&](const Impl::Entry& e) {
+                return e.first_ == first && e.count_ == count && e.matrix_ == matrix;
+            });
+            std::optional<Impl::Entry> transient;
+            const Impl::Entry* map;
+            if (found != s.maps_.end()) {
+                ++s.hits_;
+                s.maps_.splice(s.maps_.begin(), s.maps_, found);
+                map = &s.maps_.front();
+            }
+            else {
+                // 构建与执行均同步；只驱逐无人使用的已完成映射。
+                auto candidate = s.build(first, count, matrix);
+                if (candidate.bytes_ <= s.budget_) {
+                    while (s.used_ > s.budget_ - candidate.bytes_) {
+                        s.used_ -= s.maps_.back().bytes_;
+                        s.maps_.pop_back();
+                    }
+                    s.maps_.push_front(std::move(candidate));
+                    s.used_ += s.maps_.front().bytes_;
+                    map = &s.maps_.front();
+                }
+                else {
+                    transient.emplace(std::move(candidate));
+                    map = &*transient;
                 }
             }
-        }
-        std::vector<std::size_t> order(length);
-        std::iota(order.begin(), order.end(), 0);
-        {
-            EMBERFIELD_NVTX_SCOPE("emberfield::assembly::AssemblyAccumulator::add/sortSlots");
-            std::stable_sort(order.begin(), order.end(),
-                             [&](std::size_t a, std::size_t b) { return slots[a] < slots[b]; });
-        }
-        std::vector<Index> targets;
-        std::vector<std::size_t> boundaries;
-        for (std::size_t i = 0; i < length; ++i) {
-            if (!i || slots[order[i]] != targets.back()) {
-                targets.push_back(slots[order[i]]);
-                boundaries.push_back(i);
+            const auto n = map->targets_.size();
+            if (!n) {
+                return;
             }
+            CudaBuffer<double> large;
+            double* next;
+            if (n <= 64ULL * 1024 * 1024 / sizeof(double)) {
+                if (s.next_.size() < n) {
+                    s.next_ = CudaBuffer<double>(n);
+                }
+                next = s.next_.deviceData();
+            }
+            else {
+                large = CudaBuffer<double>(n);
+                next = large.deviceData();
+            } // 公开大切片沿用旧有界符号预算。
+            device::check(cudaMemset(s.status_.deviceData(), 0, sizeof(int)));
+            reduce<<<device::grid(n), 128>>>(n, map->targets_.deviceData(), map->boundaries_.deviceData(),
+                                             map->order_.deviceData(), entries.deviceData(), output, next,
+                                             s.status_.deviceData());
+            device::check(cudaGetLastError());
+            int bad{};
+            device::check(cudaMemcpy(&bad, s.status_.deviceData(), sizeof(int), cudaMemcpyDeviceToHost));
+            if (bad) {
+                throw std::overflow_error("组装或线性系统出现不可表示的浮点结果");
+            }
+            commit<<<device::grid(n), 128>>>(n, map->targets_.deviceData(), next, output);
+            device::check(cudaGetLastError());
+            device::check(cudaStreamSynchronize(nullptr));
         }
-        boundaries.push_back(length);
-        CudaBuffer<Index> targetDevice{std::span<const Index>(targets)};
-        CudaBuffer<std::size_t> boundaryDevice{std::span<const std::size_t>(boundaries)};
-        CudaBuffer<std::size_t> orderDevice{std::span<const std::size_t>(order)};
-        CudaBuffer<double> next(targets.size());
-        device::ErrorFlag status;
-        auto* output = matrix ? matrix_.deviceValues() : load_.deviceData();
-        reduce<<<device::grid(targets.size()), 128>>>(targets.size(), targetDevice.deviceData(),
-                                                      boundaryDevice.deviceData(), orderDevice.deviceData(),
-                                                      entries.deviceData(), output, next.deviceData(), status.data());
-        status.verify();
-        commit<<<device::grid(targets.size()), 128>>>(targets.size(), targetDevice.deviceData(), next.deviceData(),
-                                                      output);
-        device::check(cudaGetLastError());
-        device::check(cudaStreamSynchronize(nullptr));
-    }
+    } // namespace detail
 } // namespace emberfield::assembly
